@@ -1,0 +1,257 @@
+---
+titulo: Refinadores de máscaras em talhões agrícolas
+resumo: Avaliação de refinadores de máscaras de segmentação em imagens Sentinel-2 de 10 m/pixel do PASTIS, em dois experimentos, um só com milho e outro com todas as culturas.
+contexto: TCC · 2026
+tipo: Pesquisa · TCC na UFV
+periodo: "2026"
+ordem: 5
+stack: [PyTorch, CascadePSP, SegRefiner, SAM, HyperFree, Sentinel-2, PASTIS]
+---
+
+import Diagrama from '../../../components/Diagrama.astro';
+import GradeMascaras from '../../../components/GradeMascaras.astro';
+import { diagramas } from '../../../data/diagramas';
+
+## Contexto
+
+A delimitação de talhões agrícolas em imagens de satélite é a base de aplicações como o monitoramento de safras e as estatísticas agropecuárias. Modelos de segmentação geram máscaras para essa tarefa, mas costumam errar contornos, fundir talhões vizinhos e fragmentar talhões únicos.
+
+Refinadores agnósticos ao modelo corrigem a máscara depois da segmentação, sem alterar nem retreinar o segmentador. Os existentes foram feitos para imagens naturais, e a aplicação deles a talhões tem se concentrado em imagens de alta resolução. Em 10 m/pixel, talhões pequenos e faixas de separação ocupam poucos pixels.
+
+## Dados e protocolo
+
+- **PASTIS:** recortes de 128 × 128 pixels de séries temporais Sentinel-2, com 10 bandas por data e dezenas de datas por recorte.
+- **Validação:** cinco folds geográficos. A máscara inicial de cada recorte vem de um segmentador que não o viu no treino.
+- **Métricas:** IoU, recall e precision em todos os experimentos; erro de componentes conectados (GTC) no de milho; IoU de contorno (Boundary IoU) e AP50/AR50 por talhão no de todas as culturas. Médias entre folds.
+
+Os dois experimentos usam o mesmo conjunto de dados com alvos diferentes. O de milho é uma classe pequena e esparsa; o de todas as culturas pede que o refinador separe cada talhão do fundo e dos vizinhos.
+
+## Experimento 1 · milho
+
+### Alvo e máscaras iniciais
+
+Milho contra todo o resto: todos os outros rótulos contam como negativos, e todos os pixels entram nas métricas. As máscaras iniciais vêm de três segmentadores: U-TAE e U-Net 3D, que usam a série temporal completa, e U-Net 2D, que usa só a mediana das datas e produz máscaras bem piores.
+
+<GradeMascaras
+  colunas={['RGB mediano', 'Referência', 'U-TAE', 'U-Net 3D', 'U-Net 2D']}
+  linhas={[
+    {
+      titulo: 'Recorte 30052',
+      celulas: [
+        { src: '/img/tcc/30052_rgb.png' },
+        { src: '/img/tcc/30052_referencia.png' },
+        { src: '/img/tcc/30052_inicial_utae.png', legenda: 'IoU 80,1%' },
+        { src: '/img/tcc/30052_inicial_unet3d.png', legenda: 'IoU 85,0%' },
+        { src: '/img/tcc/30052_inicial_unet2d.png', legenda: 'IoU 22,8%' },
+      ],
+    },
+  ]}
+  legenda="Milho em amarelo. O mesmo recorte segmentado pelos três modelos: os que usam a série temporal acertam a maior parte dos talhões, e a U-Net 2D marca milho em boa parte do recorte."
+/>
+
+### Refinadores
+
+- **Treinados no PASTIS:** SegRefiner com ajuste fino, CascadePSP com o RGB mediano e CascadePSP adaptado às 10 bandas. Os dois CascadePSP foram ajustados sobre as máscaras da U-Net 2D e aplicados às outras duas origens por transferência, sem novo ajuste.
+- **Sem treino no domínio:** SAMRefiner e PromptMoE, com o SAM ViT-H (RGB) e com o HyperFree-H, um modelo de fundação para sensoriamento remoto que recebe as 10 bandas.
+
+Para usar as 10 bandas no CascadePSP sem perder o pré-treino em RGB, adicionei à primeira convolução conexões para as 7 bandas extras, com pesos iniciais zerados. No início do treino a rede se comporta exatamente como a original; só essas conexões, o PSP e o decoder são treinados, e o encoder fica congelado.
+
+<Diagrama
+  diagrama={diagramas['cascadepsp-espectral']}
+  lang="pt"
+  id="cascadepsp-espectral"
+  titulo="Adaptação espectral do CascadePSP"
+/>
+
+### Resultados
+
+Variação de IoU depois do refinamento, em pontos percentuais. Valores positivos são ganho.
+
+| | U-TAE | U-Net 3D | U-Net 2D |
+|---|--:|--:|--:|
+| **IoU da máscara inicial** | **77,6%** | **76,8%** | **54,7%** |
+| SegRefiner | +0,3 ¹ | +0,4 | +2,0 |
+| CascadePSP RGB | −1,5 ² | −0,8 ² | +2,2 |
+| CascadePSP 10 bandas | −1,4 ² | −1,0 ² | **+2,7** |
+| PromptMoE · SAM ViT-H | −15,1 | −14,1 | −7,5 |
+| PromptMoE · HyperFree-H | −17,6 | −17,0 | −10,4 |
+| SAMRefiner · SAM ViT-H | −24,1 | −23,9 | −16,1 |
+| SAMRefiner · HyperFree-H | −15,3 | −14,9 | −8,5 |
+
+¹ Três folds concluídos; os demais têm cinco. ² Aplicado por transferência, com o modelo ajustado sobre a U-Net 2D.
+
+- **Refinar compensa quando a máscara inicial é fraca.** Sobre a U-Net 2D, os três refinadores treinados no PASTIS ganham de 2,0 a 2,7 pontos de IoU, e o GTC cai de 41,3% para 34,6% com o CascadePSP de 10 bandas.
+- **Sobre máscaras já boas, o espaço é pequeno.** O SegRefiner ganha 0,3 a 0,4 ponto sobre U-TAE e U-Net 3D; o CascadePSP, transferido sem novo ajuste, perde até 1,5 ponto.
+- **Refinadores sem treino no domínio pioram todas as máscaras,** de 7,5 a 24,1 pontos.
+
+### Exemplos
+
+Os mesmos cinco recortes de teste, todos partindo da máscara da U-Net 2D. As quatro primeiras linhas são o melhor ou o pior caso de algum refinador, escolhidos depois da avaliação; a última foi sorteada. Elas mostram como o resultado varia de um recorte para outro, não o desempenho médio.
+
+<GradeMascaras
+  colunas={['Referência', 'Inicial (U-Net 2D)', 'CascadePSP RGB', 'CascadePSP 10 bandas', 'SegRefiner']}
+  linhas={[
+    {
+      titulo: '30355 · melhor caso do CascadePSP RGB',
+      celulas: [
+        { src: '/img/tcc/30355_referencia.png' },
+        { src: '/img/tcc/30355_inicial.png', legenda: 'IoU 43,2%' },
+        { src: '/img/tcc/30355_cascadepsp_rgb.png', legenda: 'IoU 86,7%' },
+        { src: '/img/tcc/30355_cascadepsp_10bands.png', legenda: 'IoU 80,5%' },
+        { src: '/img/tcc/30355_segrefiner.png', legenda: 'IoU 34,3%' },
+      ],
+    },
+    {
+      titulo: '30184 · melhor caso do CascadePSP 10 bandas',
+      celulas: [
+        { src: '/img/tcc/30184_referencia.png' },
+        { src: '/img/tcc/30184_inicial.png', legenda: 'IoU 36,7%' },
+        { src: '/img/tcc/30184_cascadepsp_rgb.png', legenda: 'IoU 58,4%' },
+        { src: '/img/tcc/30184_cascadepsp_10bands.png', legenda: 'IoU 82,9%' },
+        { src: '/img/tcc/30184_segrefiner.png', legenda: 'IoU 44,6%' },
+      ],
+    },
+    {
+      titulo: '30117 · melhor caso do SegRefiner',
+      celulas: [
+        { src: '/img/tcc/30117_referencia.png' },
+        { src: '/img/tcc/30117_inicial.png', legenda: 'IoU 51,4%' },
+        { src: '/img/tcc/30117_cascadepsp_rgb.png', legenda: 'IoU 0,0%' },
+        { src: '/img/tcc/30117_cascadepsp_10bands.png', legenda: 'IoU 90,3%' },
+        { src: '/img/tcc/30117_segrefiner.png', legenda: 'IoU 78,5%' },
+      ],
+    },
+    {
+      titulo: '30363 · pior caso do CascadePSP 10 bandas',
+      celulas: [
+        { src: '/img/tcc/30363_referencia.png' },
+        { src: '/img/tcc/30363_inicial.png', legenda: 'IoU 70,3%' },
+        { src: '/img/tcc/30363_cascadepsp_rgb.png', legenda: 'IoU 82,0%' },
+        { src: '/img/tcc/30363_cascadepsp_10bands.png', legenda: 'IoU 0,0%' },
+        { src: '/img/tcc/30363_segrefiner.png', legenda: 'IoU 77,4%' },
+      ],
+    },
+    {
+      titulo: '30052 · sorteado',
+      celulas: [
+        { src: '/img/tcc/30052_referencia.png' },
+        { src: '/img/tcc/30052_inicial.png', legenda: 'IoU 22,8%' },
+        { src: '/img/tcc/30052_cascadepsp_rgb.png', legenda: 'IoU 24,8%' },
+        { src: '/img/tcc/30052_cascadepsp_10bands.png', legenda: 'IoU 34,2%' },
+        { src: '/img/tcc/30052_segrefiner.png', legenda: 'IoU 24,1%' },
+      ],
+    },
+  ]}
+  legenda="Milho em amarelo sobre o RGB mediano escurecido. Cada recorte tem 128 × 128 pixels de 10 m, exibidos sem suavização."
+/>
+
+## Experimento 2 · todas as culturas
+
+### Alvo e máscaras iniciais
+
+Todos os talhões agrícolas contra o fundo, nos 2.433 recortes do PASTIS. A margem de cada talhão conta como fundo, então talhões vizinhos ficam separados na referência, e as áreas sem rótulo são ignoradas. As máscaras iniciais vêm de HRNet e U-Net 2D, as duas com as 10 bandas medianas, e de uma CNN do NeuroFuser que o refinador nunca viu no treino.
+
+### Refinador
+
+CascadePSP com as 10 bandas, em duas etapas: pré-treino em máscaras degradadas artificialmente, que não dependem de nenhum segmentador, e ajuste com 80% de máscaras reais (HRNet e U-Net 2D em partes iguais) e 20% sintéticas, com perda BCE mais um termo de bordas. Um modelo por fold. Como comparação, SAMRefiner sem treino e SAMRefiner++, que adapta com LoRA a camada do SAM ViT-B que estima o IoU e escolhe entre as máscaras candidatas.
+
+### Resultados
+
+Variação depois do refinamento, em pontos percentuais, com média de cinco folds e 2.433 recortes por segmentador.
+
+| | HRNet | U-Net 2D | NeuroFuser CNN ³ |
+|---|--:|--:|--:|
+| **IoU da máscara inicial** | **71,5%** | **70,7%** | **71,1%** |
+| CascadePSP · IoU | −0,2 | +0,1 | 0,0 |
+| CascadePSP · Boundary IoU | +0,6 | +0,8 | +0,9 |
+| CascadePSP · AP50 | +0,8 | +2,6 | **+3,0** |
+| CascadePSP · AR50 | +1,3 | +3,2 | **+3,9** |
+| SAMRefiner · IoU | −3,4 | −3,0 | −3,2 |
+| SAMRefiner · AP50 | −20,2 | −17,4 | −17,9 |
+| SAMRefiner++ (LoRA) · IoU | −1,1 | −0,9 | −1,0 |
+| SAMRefiner++ (LoRA) · AP50 | −7,7 | −6,9 | −7,4 |
+
+³ Aplicado por transferência: nenhum refinador foi ajustado com máscaras dessa CNN.
+
+- **O IoU quase não muda, mas os talhões ficam mais bem separados.** O CascadePSP mantém o IoU (−0,2 a +0,1) e melhora o contorno (Boundary IoU +0,6 a +0,9) e a detecção de talhões individuais (AP50 +0,8 a +3,0; AR50 +1,3 a +3,9). Ele ganha precisão e perde um pouco de recall (cerca de 1,7 ponto).
+- **O ganho se mantém num segmentador que o refinador não conhecia.** Sobre a CNN do NeuroFuser, aplicada só por transferência, estão os maiores ganhos em AP50 e AR50.
+- **O SAM sem adaptação piora de novo,** com 3 pontos de IoU e quase 20 de AP50 a menos. A adaptação com LoRA reduz a perda para cerca de 1 ponto de IoU, mas não chega a melhorar a máscara inicial.
+
+### Exemplos
+
+Um recorte sorteado de cada fold de teste, escolhido só pela referência, antes e depois do CascadePSP.
+
+<GradeMascaras
+  colunas={['RGB mediano', 'Referência', 'HRNet', 'HRNet + CascadePSP', 'U-Net 2D', 'U-Net 2D + CascadePSP']}
+  linhas={[
+    {
+      titulo: '20214 · fold 1',
+      celulas: [
+        { src: '/img/tcc/culturas_20214_rgb.png' },
+        { src: '/img/tcc/culturas_20214_referencia.png' },
+        { src: '/img/tcc/culturas_20214_hrnet_antes.png', legenda: 'IoU 82,1%' },
+        { src: '/img/tcc/culturas_20214_hrnet_depois.png', legenda: 'IoU 81,7%' },
+        { src: '/img/tcc/culturas_20214_unet2d_antes.png', legenda: 'IoU 81,8%' },
+        { src: '/img/tcc/culturas_20214_unet2d_depois.png', legenda: 'IoU 81,5%' },
+      ],
+    },
+    {
+      titulo: '30497 · fold 2',
+      celulas: [
+        { src: '/img/tcc/culturas_30497_rgb.png' },
+        { src: '/img/tcc/culturas_30497_referencia.png' },
+        { src: '/img/tcc/culturas_30497_hrnet_antes.png', legenda: 'IoU 79,9%' },
+        { src: '/img/tcc/culturas_30497_hrnet_depois.png', legenda: 'IoU 80,6%' },
+        { src: '/img/tcc/culturas_30497_unet2d_antes.png', legenda: 'IoU 79,6%' },
+        { src: '/img/tcc/culturas_30497_unet2d_depois.png', legenda: 'IoU 81,0%' },
+      ],
+    },
+    {
+      titulo: '10146 · fold 3',
+      celulas: [
+        { src: '/img/tcc/culturas_10146_rgb.png' },
+        { src: '/img/tcc/culturas_10146_referencia.png' },
+        { src: '/img/tcc/culturas_10146_hrnet_antes.png', legenda: 'IoU 73,2%' },
+        { src: '/img/tcc/culturas_10146_hrnet_depois.png', legenda: 'IoU 73,7%' },
+        { src: '/img/tcc/culturas_10146_unet2d_antes.png', legenda: 'IoU 75,5%' },
+        { src: '/img/tcc/culturas_10146_unet2d_depois.png', legenda: 'IoU 75,2%' },
+      ],
+    },
+    {
+      titulo: '20365 · fold 4',
+      celulas: [
+        { src: '/img/tcc/culturas_20365_rgb.png' },
+        { src: '/img/tcc/culturas_20365_referencia.png' },
+        { src: '/img/tcc/culturas_20365_hrnet_antes.png', legenda: 'IoU 45,7%' },
+        { src: '/img/tcc/culturas_20365_hrnet_depois.png', legenda: 'IoU 44,5%' },
+        { src: '/img/tcc/culturas_20365_unet2d_antes.png', legenda: 'IoU 40,9%' },
+        { src: '/img/tcc/culturas_20365_unet2d_depois.png', legenda: 'IoU 42,4%' },
+      ],
+    },
+    {
+      titulo: '30442 · fold 5',
+      celulas: [
+        { src: '/img/tcc/culturas_30442_rgb.png' },
+        { src: '/img/tcc/culturas_30442_referencia.png' },
+        { src: '/img/tcc/culturas_30442_hrnet_antes.png', legenda: 'IoU 71,4%' },
+        { src: '/img/tcc/culturas_30442_hrnet_depois.png', legenda: 'IoU 70,9%' },
+        { src: '/img/tcc/culturas_30442_unet2d_antes.png', legenda: 'IoU 63,3%' },
+        { src: '/img/tcc/culturas_30442_unet2d_depois.png', legenda: 'IoU 65,3%' },
+      ],
+    },
+  ]}
+  legenda="Verde: talhão previsto corretamente. Laranja: falso positivo. Rosa: falso negativo. Cinza: área sem rótulo, ignorada. Cada recorte tem 128 × 128 pixels de 10 m, exibidos sem suavização."
+/>
+
+## O que os dois mostram
+
+- Refinadores treinados no domínio ajudam onde a máscara inicial é fraca, como no milho com a U-Net 2D. Sobre máscaras razoáveis, mexem pouco no IoU, mas podem melhorar contornos e a separação entre talhões.
+- Os refinadores baseados no SAM, feitos para imagens naturais, pioram as máscaras nos dois experimentos. Adaptar parte do modelo reduz a perda, mas não a elimina.
+
+## Próximos passos
+
+Identificar em quais condições cada refinador corrige ou prejudica a delimitação, por exemplo pelo tamanho dos talhões e pela qualidade da máscara inicial, e adaptar o refinamento a imagens de 10 m/pixel.
+
+## Orientação
+
+Prof. Hugo Neves, Departamento de Informática da UFV.

@@ -1,0 +1,115 @@
+---
+// Grade de recortes de máscaras (128×128 px), exibidos sem suavização.
+// Os textos vêm prontos do MDX de cada idioma.
+
+interface Celula {
+  src: string;
+  legenda?: string;
+}
+
+interface Linha {
+  titulo: string;
+  celulas: Celula[];
+}
+
+interface Props {
+  colunas: string[];
+  linhas: Linha[];
+  legenda?: string;
+}
+
+const { colunas, linhas, legenda } = Astro.props;
+---
+
+<figure class="grade-mascaras">
+  <div class="rolagem">
+    <div class="grade" style={`--colunas: ${colunas.length}`}>
+      {
+        colunas.map((c) => (
+          <span class="cabecalho mono" aria-hidden="true">
+            {c}
+          </span>
+        ))
+      }
+      {
+        linhas.map((linha) => (
+          <>
+            <span class="titulo-linha mono">{linha.titulo}</span>
+            {linha.celulas.map((celula, i) => (
+              <span class="celula">
+                <img
+                  src={celula.src}
+                  width="128"
+                  height="128"
+                  loading="lazy"
+                  decoding="async"
+                  alt={`${linha.titulo} · ${colunas[i]}${celula.legenda ? ` · ${celula.legenda}` : ''}`}
+                />
+                {celula.legenda && <span class="legenda-celula mono">{celula.legenda}</span>}
+              </span>
+            ))}
+          </>
+        ))
+      }
+    </div>
+  </div>
+  {legenda && <figcaption>{legenda}</figcaption>}
+</figure>
+
+<style>
+  .grade-mascaras {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .rolagem {
+    overflow-x: auto;
+  }
+
+  .grade {
+    display: grid;
+    grid-template-columns: repeat(var(--colunas), minmax(92px, 1fr));
+    gap: 6px 8px;
+    min-width: calc(var(--colunas) * 100px);
+  }
+
+  .cabecalho {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.3;
+    align-self: end;
+  }
+
+  .titulo-linha {
+    grid-column: 1 / -1;
+    font-size: 11px;
+    color: var(--text2);
+    margin-top: 10px;
+  }
+
+  .celula {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  img {
+    display: block;
+    width: 100%;
+    height: auto;
+    image-rendering: pixelated;
+    border-radius: 3px;
+  }
+
+  .legenda-celula {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  figcaption {
+    font-size: 13px;
+    color: var(--muted);
+    max-width: 68ch;
+  }
+</style>

@@ -1,0 +1,257 @@
+---
+titulo: Mask refiners for agricultural field delineation
+resumo: Evaluation of segmentation mask refiners on 10 m/pixel Sentinel-2 imagery from PASTIS, in two experiments, one with maize only and one with all crops.
+contexto: Thesis · 2026
+tipo: Research · Undergraduate thesis at UFV
+periodo: "2026"
+ordem: 5
+stack: [PyTorch, CascadePSP, SegRefiner, SAM, HyperFree, Sentinel-2, PASTIS]
+---
+
+import Diagrama from '../../../components/Diagrama.astro';
+import GradeMascaras from '../../../components/GradeMascaras.astro';
+import { diagramas } from '../../../data/diagramas';
+
+## Context
+
+Delineating agricultural fields in satellite imagery underpins applications such as crop monitoring and agricultural statistics. Segmentation models produce masks for this task, but they often misplace boundaries, merge neighboring fields and split single fields into fragments.
+
+Model-agnostic refiners correct the mask after segmentation, without changing or retraining the segmenter. Existing ones were designed for natural images, and their use on agricultural fields has focused on high-resolution imagery. At 10 m/pixel, small fields and narrow boundaries span only a few pixels.
+
+## Data and protocol
+
+- **PASTIS:** 128 × 128 pixel patches of Sentinel-2 time series, with 10 bands per date and dozens of dates per patch.
+- **Validation:** five geographic folds. Each patch's initial mask comes from a segmentation model that never saw it during training.
+- **Metrics:** IoU, recall and precision in both experiments; connected-component error (GTC) for maize; boundary IoU and per-field AP50/AR50 for all crops. Averages across folds.
+
+Both experiments use the same dataset with different targets. Maize is a small, sparse class; all crops requires the refiner to separate each field from the background and from its neighbors.
+
+## Experiment 1 · maize
+
+### Target and initial masks
+
+Maize against everything else: every other label counts as negative, and every pixel is scored. The initial masks come from three models: U-TAE and U-Net 3D, which use the full time series, and U-Net 2D, which uses only the median over dates and produces much worse masks.
+
+<GradeMascaras
+  colunas={['Median RGB', 'Reference', 'U-TAE', 'U-Net 3D', 'U-Net 2D']}
+  linhas={[
+    {
+      titulo: 'Patch 30052',
+      celulas: [
+        { src: '/img/tcc/30052_rgb.png' },
+        { src: '/img/tcc/30052_referencia.png' },
+        { src: '/img/tcc/30052_inicial_utae.png', legenda: 'IoU 80.1%' },
+        { src: '/img/tcc/30052_inicial_unet3d.png', legenda: 'IoU 85.0%' },
+        { src: '/img/tcc/30052_inicial_unet2d.png', legenda: 'IoU 22.8%' },
+      ],
+    },
+  ]}
+  legenda="Maize in yellow. The same patch segmented by the three models: the ones using the time series get most fields right, while U-Net 2D marks maize across much of the patch."
+/>
+
+### Refiners
+
+- **Trained on PASTIS:** fine-tuned SegRefiner, CascadePSP on the median RGB, and CascadePSP adapted to the 10 bands. Both CascadePSP variants were tuned on U-Net 2D masks and applied to the other two sources by transfer, without further tuning.
+- **No in-domain training:** SAMRefiner and PromptMoE, with SAM ViT-H (RGB) and with HyperFree-H, a remote sensing foundation model that takes all 10 bands.
+
+To use the 10 bands in CascadePSP without losing its RGB pretraining, I added connections for the 7 extra bands to the first convolution, with weights initialized to zero. At the start of training the network behaves exactly like the original; only these connections, the PSP module and the decoder are trained, and the encoder stays frozen.
+
+<Diagrama
+  diagrama={diagramas['cascadepsp-espectral']}
+  lang="en"
+  id="cascadepsp-espectral"
+  titulo="Spectral adaptation of CascadePSP"
+/>
+
+### Results
+
+Change in IoU after refinement, in percentage points. Positive values are gains.
+
+| | U-TAE | U-Net 3D | U-Net 2D |
+|---|--:|--:|--:|
+| **Initial mask IoU** | **77.6%** | **76.8%** | **54.7%** |
+| SegRefiner | +0.3 ¹ | +0.4 | +2.0 |
+| CascadePSP RGB | −1.5 ² | −0.8 ² | +2.2 |
+| CascadePSP 10 bands | −1.4 ² | −1.0 ² | **+2.7** |
+| PromptMoE · SAM ViT-H | −15.1 | −14.1 | −7.5 |
+| PromptMoE · HyperFree-H | −17.6 | −17.0 | −10.4 |
+| SAMRefiner · SAM ViT-H | −24.1 | −23.9 | −16.1 |
+| SAMRefiner · HyperFree-H | −15.3 | −14.9 | −8.5 |
+
+¹ Three completed folds; all others have five. ² Applied by transfer, using the model tuned on U-Net 2D.
+
+- **Refinement pays off when the initial mask is poor.** On U-Net 2D, the three refiners trained on PASTIS gain 2.0 to 2.7 IoU points, and GTC drops from 41.3% to 34.6% with the 10-band CascadePSP.
+- **On masks that are already good, there is little room.** SegRefiner gains 0.3 to 0.4 points on U-TAE and U-Net 3D; CascadePSP, transferred without further tuning, loses up to 1.5 points.
+- **Refiners without in-domain training make every mask worse,** by 7.5 to 24.1 points.
+
+### Examples
+
+The same five test patches, all starting from the U-Net 2D mask. The first four rows are the best or worst case of some refiner, picked after evaluation; the last one was drawn at random. They show how much results vary from patch to patch, not average performance.
+
+<GradeMascaras
+  colunas={['Reference', 'Initial (U-Net 2D)', 'CascadePSP RGB', 'CascadePSP 10 bands', 'SegRefiner']}
+  linhas={[
+    {
+      titulo: '30355 · best case for CascadePSP RGB',
+      celulas: [
+        { src: '/img/tcc/30355_referencia.png' },
+        { src: '/img/tcc/30355_inicial.png', legenda: 'IoU 43.2%' },
+        { src: '/img/tcc/30355_cascadepsp_rgb.png', legenda: 'IoU 86.7%' },
+        { src: '/img/tcc/30355_cascadepsp_10bands.png', legenda: 'IoU 80.5%' },
+        { src: '/img/tcc/30355_segrefiner.png', legenda: 'IoU 34.3%' },
+      ],
+    },
+    {
+      titulo: '30184 · best case for CascadePSP 10 bands',
+      celulas: [
+        { src: '/img/tcc/30184_referencia.png' },
+        { src: '/img/tcc/30184_inicial.png', legenda: 'IoU 36.7%' },
+        { src: '/img/tcc/30184_cascadepsp_rgb.png', legenda: 'IoU 58.4%' },
+        { src: '/img/tcc/30184_cascadepsp_10bands.png', legenda: 'IoU 82.9%' },
+        { src: '/img/tcc/30184_segrefiner.png', legenda: 'IoU 44.6%' },
+      ],
+    },
+    {
+      titulo: '30117 · best case for SegRefiner',
+      celulas: [
+        { src: '/img/tcc/30117_referencia.png' },
+        { src: '/img/tcc/30117_inicial.png', legenda: 'IoU 51.4%' },
+        { src: '/img/tcc/30117_cascadepsp_rgb.png', legenda: 'IoU 0.0%' },
+        { src: '/img/tcc/30117_cascadepsp_10bands.png', legenda: 'IoU 90.3%' },
+        { src: '/img/tcc/30117_segrefiner.png', legenda: 'IoU 78.5%' },
+      ],
+    },
+    {
+      titulo: '30363 · worst case for CascadePSP 10 bands',
+      celulas: [
+        { src: '/img/tcc/30363_referencia.png' },
+        { src: '/img/tcc/30363_inicial.png', legenda: 'IoU 70.3%' },
+        { src: '/img/tcc/30363_cascadepsp_rgb.png', legenda: 'IoU 82.0%' },
+        { src: '/img/tcc/30363_cascadepsp_10bands.png', legenda: 'IoU 0.0%' },
+        { src: '/img/tcc/30363_segrefiner.png', legenda: 'IoU 77.4%' },
+      ],
+    },
+    {
+      titulo: '30052 · random',
+      celulas: [
+        { src: '/img/tcc/30052_referencia.png' },
+        { src: '/img/tcc/30052_inicial.png', legenda: 'IoU 22.8%' },
+        { src: '/img/tcc/30052_cascadepsp_rgb.png', legenda: 'IoU 24.8%' },
+        { src: '/img/tcc/30052_cascadepsp_10bands.png', legenda: 'IoU 34.2%' },
+        { src: '/img/tcc/30052_segrefiner.png', legenda: 'IoU 24.1%' },
+      ],
+    },
+  ]}
+  legenda="Maize in yellow over the darkened median RGB. Each patch is 128 × 128 pixels at 10 m, shown without smoothing."
+/>
+
+## Experiment 2 · all crops
+
+### Target and initial masks
+
+All agricultural fields against the background, on all 2,433 PASTIS patches. Each field's margin counts as background, so neighboring fields are separated in the reference, and unlabeled areas are ignored. The initial masks come from HRNet and U-Net 2D, both on the 10 median bands, and from a NeuroFuser CNN that the refiner never saw during training.
+
+### Refiner
+
+CascadePSP on the 10 bands, in two stages: pretraining on artificially degraded masks, which don't depend on any segmentation model, then tuning on 80% real masks (HRNet and U-Net 2D in equal parts) and 20% synthetic ones, with a BCE loss plus an edge term. One model per fold. For comparison, SAMRefiner without training and SAMRefiner++, which uses LoRA to adapt the SAM ViT-B layer that estimates IoU and chooses among candidate masks.
+
+### Results
+
+Change after refinement, in percentage points, averaged over five folds with 2,433 patches per segmentation model.
+
+| | HRNet | U-Net 2D | NeuroFuser CNN ³ |
+|---|--:|--:|--:|
+| **Initial mask IoU** | **71.5%** | **70.7%** | **71.1%** |
+| CascadePSP · IoU | −0.2 | +0.1 | 0.0 |
+| CascadePSP · Boundary IoU | +0.6 | +0.8 | +0.9 |
+| CascadePSP · AP50 | +0.8 | +2.6 | **+3.0** |
+| CascadePSP · AR50 | +1.3 | +3.2 | **+3.9** |
+| SAMRefiner · IoU | −3.4 | −3.0 | −3.2 |
+| SAMRefiner · AP50 | −20.2 | −17.4 | −17.9 |
+| SAMRefiner++ (LoRA) · IoU | −1.1 | −0.9 | −1.0 |
+| SAMRefiner++ (LoRA) · AP50 | −7.7 | −6.9 | −7.4 |
+
+³ Applied by transfer: no refiner was tuned on masks from this CNN.
+
+- **IoU barely moves, but fields are better separated.** CascadePSP keeps IoU (−0.2 to +0.1) and improves boundaries (boundary IoU +0.6 to +0.9) and detection of individual fields (AP50 +0.8 to +3.0; AR50 +1.3 to +3.9). It gains precision and loses some recall (about 1.7 points).
+- **The gain holds on a segmentation model the refiner had never seen.** The largest AP50 and AR50 gains are on the NeuroFuser CNN, applied by transfer only.
+- **SAM without adaptation makes things worse again,** losing 3 IoU points and nearly 20 AP50 points. LoRA adaptation cuts the loss to about 1 IoU point, but still doesn't improve on the initial mask.
+
+### Examples
+
+One randomly drawn patch from each test fold, chosen using the reference only, before and after CascadePSP.
+
+<GradeMascaras
+  colunas={['Median RGB', 'Reference', 'HRNet', 'HRNet + CascadePSP', 'U-Net 2D', 'U-Net 2D + CascadePSP']}
+  linhas={[
+    {
+      titulo: '20214 · fold 1',
+      celulas: [
+        { src: '/img/tcc/culturas_20214_rgb.png' },
+        { src: '/img/tcc/culturas_20214_referencia.png' },
+        { src: '/img/tcc/culturas_20214_hrnet_antes.png', legenda: 'IoU 82.1%' },
+        { src: '/img/tcc/culturas_20214_hrnet_depois.png', legenda: 'IoU 81.7%' },
+        { src: '/img/tcc/culturas_20214_unet2d_antes.png', legenda: 'IoU 81.8%' },
+        { src: '/img/tcc/culturas_20214_unet2d_depois.png', legenda: 'IoU 81.5%' },
+      ],
+    },
+    {
+      titulo: '30497 · fold 2',
+      celulas: [
+        { src: '/img/tcc/culturas_30497_rgb.png' },
+        { src: '/img/tcc/culturas_30497_referencia.png' },
+        { src: '/img/tcc/culturas_30497_hrnet_antes.png', legenda: 'IoU 79.9%' },
+        { src: '/img/tcc/culturas_30497_hrnet_depois.png', legenda: 'IoU 80.6%' },
+        { src: '/img/tcc/culturas_30497_unet2d_antes.png', legenda: 'IoU 79.6%' },
+        { src: '/img/tcc/culturas_30497_unet2d_depois.png', legenda: 'IoU 81.0%' },
+      ],
+    },
+    {
+      titulo: '10146 · fold 3',
+      celulas: [
+        { src: '/img/tcc/culturas_10146_rgb.png' },
+        { src: '/img/tcc/culturas_10146_referencia.png' },
+        { src: '/img/tcc/culturas_10146_hrnet_antes.png', legenda: 'IoU 73.2%' },
+        { src: '/img/tcc/culturas_10146_hrnet_depois.png', legenda: 'IoU 73.7%' },
+        { src: '/img/tcc/culturas_10146_unet2d_antes.png', legenda: 'IoU 75.5%' },
+        { src: '/img/tcc/culturas_10146_unet2d_depois.png', legenda: 'IoU 75.2%' },
+      ],
+    },
+    {
+      titulo: '20365 · fold 4',
+      celulas: [
+        { src: '/img/tcc/culturas_20365_rgb.png' },
+        { src: '/img/tcc/culturas_20365_referencia.png' },
+        { src: '/img/tcc/culturas_20365_hrnet_antes.png', legenda: 'IoU 45.7%' },
+        { src: '/img/tcc/culturas_20365_hrnet_depois.png', legenda: 'IoU 44.5%' },
+        { src: '/img/tcc/culturas_20365_unet2d_antes.png', legenda: 'IoU 40.9%' },
+        { src: '/img/tcc/culturas_20365_unet2d_depois.png', legenda: 'IoU 42.4%' },
+      ],
+    },
+    {
+      titulo: '30442 · fold 5',
+      celulas: [
+        { src: '/img/tcc/culturas_30442_rgb.png' },
+        { src: '/img/tcc/culturas_30442_referencia.png' },
+        { src: '/img/tcc/culturas_30442_hrnet_antes.png', legenda: 'IoU 71.4%' },
+        { src: '/img/tcc/culturas_30442_hrnet_depois.png', legenda: 'IoU 70.9%' },
+        { src: '/img/tcc/culturas_30442_unet2d_antes.png', legenda: 'IoU 63.3%' },
+        { src: '/img/tcc/culturas_30442_unet2d_depois.png', legenda: 'IoU 65.3%' },
+      ],
+    },
+  ]}
+  legenda="Green: correctly predicted field. Orange: false positive. Pink: false negative. Gray: unlabeled area, ignored. Each patch is 128 × 128 pixels at 10 m, shown without smoothing."
+/>
+
+## What both show
+
+- Refiners trained in-domain help where the initial mask is poor, as with maize on U-Net 2D. On reasonable masks they barely change IoU, but can improve boundaries and the separation between fields.
+- SAM-based refiners, built for natural images, make the masks worse in both experiments. Adapting part of the model reduces the loss but doesn't remove it.
+
+## Next steps
+
+Identify the conditions under which each refiner fixes or harms the delineation, for example by field size and initial mask quality, and adapt refinement to 10 m/pixel imagery.
+
+## Advisor
+
+Prof. Hugo Neves, Department of Informatics, UFV.
