@@ -1,0 +1,33 @@
+---
+import { ui, type Lang } from '../i18n';
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const ano = new Date().getFullYear();
+---
+
+<footer class="wrap rodape mono">
+  <span>© {ano} Luka Gouvêa</span>
+  <slot>
+    <span>{ui[lang].rodape}</span>
+  </slot>
+</footer>
+
+<style>
+  .rodape {
+    padding-block: 24px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .rodape :global(a) {
+    color: var(--muted);
+  }
+</style>

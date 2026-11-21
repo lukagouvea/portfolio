@@ -1,0 +1,177 @@
+---
+import { rotas, ui, type Lang } from '../i18n';
+
+interface Props {
+  lang: Lang;
+  alternativa: string;
+  pagina: 'inicio' | 'projeto';
+}
+
+const { lang, alternativa, pagina } = Astro.props;
+const t = ui[lang];
+const inicio = rotas.inicio(lang);
+const ancora = (id: string) => (pagina === 'inicio' ? `#${id}` : `${inicio}#${id}`);
+---
+
+<header class="wrap topo">
+  <a class="marca mono" href={inicio}>luka<span>.</span>gouvea</a>
+  <div class="acoes">
+    {
+      pagina === 'inicio' ? (
+        <nav aria-label={lang === 'pt' ? 'Principal' : 'Main'} class="nav mono">
+          <a href={ancora('experiencia')}>{t.nav.experiencia}</a>
+          <a href={ancora('projetos')}>{t.nav.projetos}</a>
+          <a href={ancora('formacao')}>{t.nav.formacao}</a>
+          <a href={ancora('contato')}>{t.nav.contato}</a>
+        </nav>
+      ) : (
+        <a class="nav-voltar mono" href={ancora('projetos')}>
+          {t.projeto.voltar}
+        </a>
+      )
+    }
+    <div class="ferramentas">
+      <a class="idioma mono" href={alternativa} hreflang={lang === 'pt' ? 'en' : 'pt-BR'} aria-label={t.outroIdioma.aria}>
+        {t.outroIdioma.rotulo}
+      </a>
+      <button
+        type="button"
+        class="tema"
+        hidden
+        data-rotulo-claro={t.tema.claro}
+        data-rotulo-escuro={t.tema.escuro}
+        aria-label={t.tema.claro}
+      >
+        <svg class="sol" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+        </svg>
+        <svg class="lua" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<script>
+  const botao = document.querySelector<HTMLButtonElement>('button.tema');
+  const raiz = document.documentElement;
+  const atual = () => (raiz.dataset.theme === 'light' ? 'light' : 'dark');
+
+  function rotular() {
+    if (!botao) return;
+    const rotulo = atual() === 'dark' ? botao.dataset.rotuloClaro : botao.dataset.rotuloEscuro;
+    if (rotulo) botao.setAttribute('aria-label', rotulo);
+  }
+
+  if (botao) {
+    botao.hidden = false;
+    rotular();
+    botao.addEventListener('click', () => {
+      const novo = atual() === 'dark' ? 'light' : 'dark';
+      raiz.dataset.theme = novo;
+      try {
+        localStorage.setItem('tema', novo);
+      } catch {
+        // armazenamento indisponível: o tema vale só para esta visita
+      }
+      rotular();
+    });
+  }
+</script>
+
+<style>
+  .topo {
+    padding-block: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 4px 24px;
+  }
+
+  .marca {
+    font-size: 14px;
+    text-decoration: none;
+    padding: 10px 0;
+  }
+
+  .marca span {
+    color: var(--accent);
+  }
+
+  .acoes {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 20px;
+  }
+
+  .nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 18px;
+    font-size: 13px;
+  }
+
+  .nav a,
+  .nav-voltar,
+  .idioma {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 13px;
+  }
+
+  .nav a,
+  .nav-voltar {
+    padding: 12px 0;
+  }
+
+  .nav a:hover,
+  .nav-voltar:hover,
+  .idioma:hover {
+    color: var(--text);
+  }
+
+  .ferramentas {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .idioma {
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .tema {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--line2);
+    border-radius: 6px;
+    color: var(--text);
+    cursor: pointer;
+  }
+
+  .tema[hidden] {
+    display: none;
+  }
+
+  .tema:hover {
+    border-color: var(--muted);
+  }
+
+  :global([data-theme='light']) .sol,
+  :global([data-theme='dark']) .lua {
+    display: none;
+  }
+</style>
