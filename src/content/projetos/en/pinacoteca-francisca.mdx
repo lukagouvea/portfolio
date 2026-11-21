@@ -5,17 +5,51 @@ contexto: MaVILab · 2023
 tipo: Outreach · MaVILab, UFV
 periodo: 09/2023 – 11/2023
 ordem: 8
-stack: [MediaPipe, Video warping, Computer vision]
+stack: [Python, MediaPipe, MakeItTalk, OpenCV, Delaunay triangulation, Mesh warping]
 links:
   ver: https://mavilab-ufv.github.io/pinacoteca-50-anos/face-animation
 ---
 
+import FiguraImagens from '../../../components/FiguraImagens.astro';
+import Video from '../../../components/Video.astro';
+
 ## Context
 
-Digital installation for the 50th anniversary exhibition of the UFV Art Gallery, shown from November 7 to 18, 2023. Tarsila do Amaral's portrait “Francisca” was made to speak.
+A digital piece by MaVILab for the 50th anniversary exhibition of the UFV Art Gallery, shown from November 7 to 18, 2023. “Francisca” is a pencil portrait by Tarsila do Amaral; in the installation, she narrates a text about the work in Portuguese.
+
+<Video
+  src="/img/francisca/francisca.mp4"
+  poster="/img/francisca/francisca-poster.jpg"
+  largura={540}
+  altura={728}
+  titulo="Video of Francisca narrating the exhibition text"
+  legenda="Video shown at the exhibition, with audio in Portuguese (45 s)."
+/>
+
+## Starting point
+
+MakeItTalk animates an image from audio in two steps, each with its own neural network: it detects the image's facial landmarks and generates, from the audio, how those landmarks move over time. It then warps the image to follow them.
+
+Two limitations ruled out using it as is:
+
+- the landmark detector was trained on photos and realistic paintings, and the portrait is a loose line drawing;
+- the network that turns audio into motion was trained on English, and the text is in Portuguese.
 
 ## What I did
 
-- Used MediaPipe to track facial movement in a reference video.
-- Manually adjusted facial landmarks to align them with the illustration.
-- Applied video warping to deform the portrait naturally.
+- **Landmarks on the portrait:** ran MakeItTalk's detector on the drawing and corrected each point by hand in an annotation tool, until they outlined the eyes, nose, mouth and jaw.
+- **Speech motion:** instead of generating motion from audio, we recorded a person reading Francisca's text and extracted facial landmarks from every frame with MediaPipe Face Landmarker. It returns 478 points per face; I kept the 68 that match the points marked on the portrait.
+- **Warping:** the 68 points, plus 12 on the image border, form a 146-triangle Delaunay mesh. For each frame, the portrait's mesh is warped to the position of the points in the recorded video, and the original audio is joined to the frames with ffmpeg.
+
+<FiguraImagens
+  imagens={[
+    { src: '/img/francisca/deteccao.jpg', largura: 600, altura: 813, rotulo: 'MakeItTalk detector', alt: 'Francisca portrait with facial landmarks found by the network, scattered outside the face' },
+    { src: '/img/francisca/ajuste.jpg', largura: 600, altura: 810, rotulo: 'Hand-adjusted landmarks', alt: 'Francisca portrait with corrected landmarks over the eyes, nose, mouth and jaw' },
+    { src: '/img/francisca/triangulacao.jpg', largura: 600, altura: 807, rotulo: 'Delaunay mesh', alt: 'Francisca portrait with the triangle mesh used for warping' },
+  ]}
+  legenda="The network, trained on realistic images, does not find the face in the drawing. After manual adjustment, the points become vertices of the mesh that is warped at every frame."
+/>
+
+## Team
+
+With Ana Osias, supervised by professors Thiago Luange Gomes and Michel M. Silva, at MaVILab, Department of Informatics, UFV.

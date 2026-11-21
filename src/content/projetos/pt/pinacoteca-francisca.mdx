@@ -5,17 +5,51 @@ contexto: MaVILab · 2023
 tipo: Extensão · MaVILab, UFV
 periodo: 09/2023 – 11/2023
 ordem: 8
-stack: [MediaPipe, Video warping, Visão computacional]
+stack: [Python, MediaPipe, MakeItTalk, OpenCV, Triangulação de Delaunay, Mesh warping]
 links:
   ver: https://mavilab-ufv.github.io/pinacoteca-50-anos/face-animation
 ---
 
+import FiguraImagens from '../../../components/FiguraImagens.astro';
+import Video from '../../../components/Video.astro';
+
 ## Contexto
 
-Instalação digital para a Exposição Comemorativa dos 50 Anos da Pinacoteca da UFV, exibida de 7 a 18 de novembro de 2023. O retrato “Francisca”, de Tarsila do Amaral, ganhou fala.
+Obra digital do MaVILab para a Exposição Comemorativa dos 50 Anos da Pinacoteca da UFV, exibida de 7 a 18 de novembro de 2023. “Francisca” é um retrato a lápis de Tarsila do Amaral; na instalação, ela narra em português um texto sobre a própria obra.
+
+<Video
+  src="/img/francisca/francisca.mp4"
+  poster="/img/francisca/francisca-poster.jpg"
+  largura={540}
+  altura={728}
+  titulo="Vídeo da Francisca narrando o texto da exposição"
+  legenda="Vídeo exibido na exposição, com áudio (45 s)."
+/>
+
+## Ponto de partida
+
+O MakeItTalk anima uma imagem a partir de um áudio em duas etapas, cada uma com uma rede neural: detecta os pontos faciais da imagem e gera, a partir do áudio, o movimento desses pontos ao longo do tempo. Depois deforma a imagem para acompanhar os pontos.
+
+Duas limitações impediam o uso direto:
+
+- o detector de pontos faciais foi treinado em fotos e pinturas realistas, e o retrato é um desenho de traço solto;
+- a rede que gera o movimento a partir do áudio foi treinada em inglês, e o texto da obra é em português.
 
 ## O que fiz
 
-- Usei o MediaPipe para rastrear os movimentos faciais de um vídeo de referência.
-- Ajustei manualmente os pontos faciais para alinhá-los à ilustração.
-- Apliquei video warping para deformar o retrato de forma orgânica.
+- **Pontos faciais do retrato:** rodei o detector do MakeItTalk no desenho e corrigi manualmente cada ponto numa ferramenta de anotação, até contornarem olhos, nariz, boca e queixo.
+- **Movimento da fala:** em vez de gerar o movimento pelo áudio, gravamos uma pessoa lendo o texto da Francisca e extraímos os pontos faciais de cada quadro com o MediaPipe Face Landmarker. Ele devolve 478 pontos por rosto; filtrei os 68 que correspondem aos pontos marcados no retrato.
+- **Deformação:** os 68 pontos, mais 12 na borda da imagem, formam uma malha de 146 triângulos por triangulação de Delaunay. A cada quadro, a malha do retrato é deformada para a posição dos pontos no vídeo gravado, e o áudio original é juntado aos quadros com o ffmpeg.
+
+<FiguraImagens
+  imagens={[
+    { src: '/img/francisca/deteccao.jpg', largura: 600, altura: 813, rotulo: 'Detector do MakeItTalk', alt: 'Retrato Francisca com os pontos faciais detectados pela rede, espalhados fora do rosto' },
+    { src: '/img/francisca/ajuste.jpg', largura: 600, altura: 810, rotulo: 'Pontos ajustados à mão', alt: 'Retrato Francisca com os pontos faciais corrigidos sobre olhos, nariz, boca e queixo' },
+    { src: '/img/francisca/triangulacao.jpg', largura: 600, altura: 807, rotulo: 'Malha de Delaunay', alt: 'Retrato Francisca com a malha de triângulos usada na deformação' },
+  ]}
+  legenda="A rede, treinada em imagens realistas, não encontra o rosto no desenho. Depois do ajuste manual, os pontos servem de vértices para a malha que é deformada a cada quadro."
+/>
+
+## Equipe
+
+Com Ana Osias, sob orientação dos professores Thiago Luange Gomes e Michel M. Silva, no MaVILab, Departamento de Informática da UFV.
