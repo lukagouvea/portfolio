@@ -1,0 +1,80 @@
+---
+// Imagens lado a lado, cada uma com um rótulo curto, e uma legenda geral.
+// Os textos vêm prontos do MDX de cada idioma.
+
+interface Imagem {
+  src: string;
+  largura: number;
+  altura: number;
+  rotulo: string;
+  alt: string;
+}
+
+interface Props {
+  imagens: Imagem[];
+  legenda?: string;
+}
+
+const { imagens, legenda } = Astro.props;
+---
+
+<figure class="figura-imagens">
+  <div class="grade" style={`--colunas: ${imagens.length}`}>
+    {
+      imagens.map((im) => (
+        <span class="celula">
+          <img src={im.src} width={im.largura} height={im.altura} loading="lazy" decoding="async" alt={im.alt} />
+          <span class="rotulo mono">{im.rotulo}</span>
+        </span>
+      ))
+    }
+  </div>
+  {legenda && <figcaption>{legenda}</figcaption>}
+</figure>
+
+<style>
+  .figura-imagens {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .grade {
+    display: grid;
+    grid-template-columns: repeat(var(--colunas), minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  @media (max-width: 640px) {
+    .grade {
+      gap: 8px;
+    }
+  }
+
+  /* Bloco, não flex: com flex o Chrome calcula a altura da linha antes de escalar a imagem */
+  .celula {
+    display: block;
+    min-width: 0;
+  }
+
+  img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 3px;
+  }
+
+  .rotulo {
+    display: block;
+    margin-top: 6px;
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--muted);
+  }
+
+  figcaption {
+    font-size: 13px;
+    color: var(--muted);
+    max-width: 68ch;
+  }
+</style>
