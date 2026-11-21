@@ -1,0 +1,57 @@
+---
+titulo: Leaf disease classifier
+resumo: Fine-tuning pretrained CNNs to classify leaf diseases; 95% validation accuracy.
+contexto: UFV · 2025
+tipo: Academic project · UFV
+periodo: 03/2025 – 07/2025
+ordem: 6
+stack: [PyTorch, NumPy, CNN, Transfer learning]
+links:
+  codigo: https://github.com/lukagouvea/plant-disease-classification
+---
+
+import GaleriaFolhas from '../../../components/GaleriaFolhas.astro';
+
+## Data
+
+The dataset is PlantVillage, in the version with the background removed: 54,306 leaf photos in 38 classes, each one a species paired with a disease, or the healthy leaf. There are 14 species; tomato alone has 10 classes.
+
+<GaleriaFolhas
+  grupos={[
+    {
+      titulo: 'Tomato',
+      folhas: [
+        { src: '/img/folhas/tomate_saudavel.jpg', legenda: 'Healthy' },
+        { src: '/img/folhas/tomate_pinta_preta.jpg', legenda: 'Early blight' },
+        { src: '/img/folhas/tomate_requeima.jpg', legenda: 'Late blight' },
+        { src: '/img/folhas/tomate_septoriose.jpg', legenda: 'Septoria leaf spot' },
+        { src: '/img/folhas/tomate_tylcv.jpg', legenda: 'Yellow leaf curl' },
+        { src: '/img/folhas/tomate_mosaico.jpg', legenda: 'Mosaic virus' },
+      ],
+    },
+    {
+      titulo: 'Other species',
+      folhas: [
+        { src: '/img/folhas/maca_saudavel.jpg', legenda: 'Apple · healthy' },
+        { src: '/img/folhas/maca_sarna.jpg', legenda: 'Apple · scab' },
+        { src: '/img/folhas/uva_esca.jpg', legenda: 'Grape · esca' },
+        { src: '/img/folhas/milho_ferrugem.jpg', legenda: 'Corn · common rust' },
+        { src: '/img/folhas/laranja_greening.jpg', legenda: 'Orange · greening' },
+        { src: '/img/folhas/batata_requeima.jpg', legenda: 'Potato · late blight' },
+      ],
+    },
+  ]}
+  legenda="Samples from PlantVillage. Within one species, several diseases show up as similar spots or yellowing."
+/>
+
+The classes are imbalanced, ranging from 152 images (healthy potato) to 5,507 (orange with greening). I split 80% for training and 20% for validation, and sampled training images with weights inversely proportional to class frequency.
+
+## What I did
+
+- Transfer learning by fine-tuning pretrained CNN backbones in PyTorch to classify multiple leaf diseases.
+- Preprocessing and data augmentation pipelines with NumPy and PyTorch DataLoaders.
+- Adapted the classification head and tuned hyperparameters to improve generalization and control overfitting.
+
+## Result
+
+95% accuracy on the validation set.

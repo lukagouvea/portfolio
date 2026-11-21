@@ -1,0 +1,96 @@
+---
+// Grupos de folhas do PlantVillage (256×256, fundo removido), cada uma com o rótulo da classe.
+// Os textos vêm prontos do MDX de cada idioma.
+
+interface Folha {
+  src: string;
+  legenda: string;
+}
+
+interface Grupo {
+  titulo: string;
+  folhas: Folha[];
+}
+
+interface Props {
+  grupos: Grupo[];
+  legenda?: string;
+}
+
+const { grupos, legenda } = Astro.props;
+---
+
+<figure class="galeria-folhas">
+  {
+    grupos.map((grupo) => (
+      <div class="grupo">
+        <span class="titulo-grupo mono">{grupo.titulo}</span>
+        <div class="grade">
+          {grupo.folhas.map((folha) => (
+            <span class="celula">
+              <img src={folha.src} width="256" height="256" loading="lazy" decoding="async" alt={folha.legenda} />
+              <span class="legenda-celula mono">{folha.legenda}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+    ))
+  }
+  {legenda && <figcaption>{legenda}</figcaption>}
+</figure>
+
+<style>
+  .galeria-folhas {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .grupo {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .titulo-grupo {
+    font-size: 11px;
+    color: var(--text2);
+  }
+
+  .grade {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  @media (max-width: 640px) {
+    .grade {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  .celula {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 3px;
+  }
+
+  .legenda-celula {
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--muted);
+  }
+
+  figcaption {
+    font-size: 13px;
+    color: var(--muted);
+    max-width: 68ch;
+  }
+</style>

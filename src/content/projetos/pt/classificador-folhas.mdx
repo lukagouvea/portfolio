@@ -1,0 +1,57 @@
+---
+titulo: Classificador de doenças em folhas
+resumo: Fine-tuning de CNNs pré-treinadas para classificar doenças em folhas; 95% de acurácia na validação.
+contexto: UFV · 2025
+tipo: Projeto acadêmico · UFV
+periodo: 03/2025 – 07/2025
+ordem: 6
+stack: [PyTorch, NumPy, CNN, Transfer learning]
+links:
+  codigo: https://github.com/lukagouvea/plant-disease-classification
+---
+
+import GaleriaFolhas from '../../../components/GaleriaFolhas.astro';
+
+## Dados
+
+O conjunto é o PlantVillage, na versão com o fundo removido: 54.306 fotos de folhas em 38 classes, cada uma formada por uma espécie e uma doença, ou pela folha saudável. São 14 espécies; o tomate sozinho tem 10 classes.
+
+<GaleriaFolhas
+  grupos={[
+    {
+      titulo: 'Tomate',
+      folhas: [
+        { src: '/img/folhas/tomate_saudavel.jpg', legenda: 'Saudável' },
+        { src: '/img/folhas/tomate_pinta_preta.jpg', legenda: 'Pinta-preta' },
+        { src: '/img/folhas/tomate_requeima.jpg', legenda: 'Requeima' },
+        { src: '/img/folhas/tomate_septoriose.jpg', legenda: 'Septoriose' },
+        { src: '/img/folhas/tomate_tylcv.jpg', legenda: 'Enrolamento amarelo' },
+        { src: '/img/folhas/tomate_mosaico.jpg', legenda: 'Mosaico' },
+      ],
+    },
+    {
+      titulo: 'Outras espécies',
+      folhas: [
+        { src: '/img/folhas/maca_saudavel.jpg', legenda: 'Maçã · saudável' },
+        { src: '/img/folhas/maca_sarna.jpg', legenda: 'Maçã · sarna' },
+        { src: '/img/folhas/uva_esca.jpg', legenda: 'Uva · esca' },
+        { src: '/img/folhas/milho_ferrugem.jpg', legenda: 'Milho · ferrugem' },
+        { src: '/img/folhas/laranja_greening.jpg', legenda: 'Laranja · greening' },
+        { src: '/img/folhas/batata_requeima.jpg', legenda: 'Batata · requeima' },
+      ],
+    },
+  ]}
+  legenda="Exemplos do PlantVillage. Dentro da mesma espécie, várias doenças aparecem como manchas ou amarelecimento parecidos."
+/>
+
+As classes são desbalanceadas: vão de 152 imagens (batata saudável) a 5.507 (laranja com greening). Separei 80% para treino e 20% para validação, e no treino sorteei as amostras com peso inverso à frequência da classe.
+
+## O que fiz
+
+- Transfer learning com fine-tuning de backbones de CNNs pré-treinadas em PyTorch, para classificar várias patologias em folhas.
+- Pipelines de pré-processamento e data augmentation com NumPy e os DataLoaders do PyTorch.
+- Adaptei a camada de classificação e ajustei hiperparâmetros para melhorar a generalização e controlar o overfitting.
+
+## Resultado
+
+95% de acurácia no conjunto de validação.
