@@ -1,0 +1,46 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+      # SITE_URL (Settings → Secrets and variables → Actions → Variables), ex.: https://seudominio.com
+      - run: npm run build
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+
+      # Secrets necessários (Settings → Secrets and variables → Actions):
+      #   DEPLOY_HOST         IP ou hostname da VPS
+      #   DEPLOY_USER         usuário de deploy na VPS (sem sudo)
+      #   DEPLOY_SSH_KEY      chave privada usada só para o deploy
+      #   DEPLOY_KNOWN_HOSTS  saída de `ssh-keyscan <host>`
+      - name: Enviar para a VPS
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # og/<lang>/<slug>/ são só os modelos dos cards; os PNGs em og/<lang>/ vão normalmente
+          rsync -az --delete --exclude 'og/*/*/' -e "ssh -i ~/.ssh/deploy" dist/ "$USER@$HOST:/var/www/portfolio/"
