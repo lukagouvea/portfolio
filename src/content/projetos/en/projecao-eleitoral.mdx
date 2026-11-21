@@ -1,0 +1,106 @@
+---
+titulo: Convergence of election projections
+resumo: Comparison of three methods that project Brazil's presidential runoff during the vote count, in the 2018, 2022 and 2026 elections, with the actual order in which polling sections arrived reconstructed from TSE data.
+contexto: UFV · 2026
+tipo: Academic project · INF425 at UFV
+periodo: "2026"
+ordem: 6
+stack: [Python, PyTorch, Pandas, Parquet, Weighted regression, Ridge, Docker]
+links:
+  codigo: https://github.com/lukagouvea/apuracoes-tse
+---
+
+import GraficoLinhas from '../../../components/GraficoLinhas.astro';
+import { opcoesAno, opcoesMetodo, paineisProjecao, paineisConvergencia } from '../../../data/eleicoes';
+
+## Context
+
+During the count, polling sections do not arrive in random order: whole regions are counted before others, and the running tally can sit several points away from the final result. Projection methods correct for this by estimating the votes still to be counted from what has already been counted and from each municipality's history.
+
+The question is how many counted sections each method needs to get close to the final result and stay close. Done with Gabriel Campos Moreira Fernandes.
+
+## Data and protocol
+
+- **Elections:** presidential runoffs of 2018 (Haddad × Bolsonaro), 2022 (Lula × Jair Bolsonaro) and 2026 (Lula × Flávio Bolsonaro), with 454 to 499 thousand sections each.
+- **Source:** 65 official files from Brazil's electoral court, TSE (about 2.5 GiB), with URLs and SHA-256 recorded, converted to Parquet and checked against the independent municipal summary.
+- **Count order:** in 2018, the time of each section's first tabulation; in 2022 and 2026, the time each ballot box report was received. Sections with the same timestamp enter together.
+- **Reference:** only the first round of the same year, aggregated by municipality. No parameter was calibrated against the evaluated result.
+- **Replay:** 103 points per election (0.1%, 0.2%, 0.5% and 1% to 100% in 1-point steps). At each point the model sees only the sections already revealed, for 927 projections in total.
+- **Metric:** absolute error in percentage points on candidate A's final vote share. The convergence point is the first percentage after which the error stays below 1.0, 0.5 or 0.25 point until the end.
+
+## Methods
+
+All three keep the counted votes fixed and estimate only the remaining ones, municipality by municipality. The expected volume of each pending section comes from first-round valid votes, adjusted by the turnout observed so far.
+
+- **Post-stratification:** uses the preference already observed in each municipality. Without local votes, it falls back to the state and then to the national total.
+- **Swing:** weighted least squares (WLS) regression of the change between first and second round, with first-round preference and municipality size as covariates.
+- **Hierarchical:** the same covariates at national, regional and state levels, with Ridge regularization pulling groups with little evidence toward the level above.
+
+The estimators are written in PyTorch and run on CPU. The environment is a Docker image with pinned versions, and a script reruns the 927 projections and compares them with the recorded ones at a 1e-10 tolerance.
+
+## Results
+
+### Projection during the count
+
+Projected final result for each candidate (solid line) and the running tally at the same point (dashed), in the order used by the replay.
+
+<GraficoLinhas
+  id="projecao-en"
+  lang="en"
+  controles={[
+    { rotulo: 'Year', opcoes: opcoesAno },
+    { rotulo: 'Method', opcoes: opcoesMetodo('en') },
+  ]}
+  paineis={paineisProjecao('en')}
+  eixoX="Sections counted (%)"
+  eixoY="Valid votes (%)"
+  legenda="From 1% of sections onward. Hover, or use the arrow keys with the chart focused, to read the values."
+/>
+
+### Comparing the methods
+
+<GraficoLinhas
+  id="convergencia-en"
+  lang="en"
+  controles={[{ rotulo: 'Year', opcoes: opcoesAno }]}
+  paineis={paineisConvergencia('en')}
+  faixa="±0.5 pp of final"
+  eixoX="Sections counted (%)"
+  eixoY="A's valid votes (%)"
+  legenda="Projected vote share of the PT candidate (A) by the three methods. The running tally is off the scale early in the 2018 and 2022 counts."
+/>
+
+### Error with 5% of sections counted
+
+In percentage points, on A's final vote share.
+
+| | 2018 | 2022 | 2026 |
+|---|--:|--:|--:|
+| Running tally | 4.99 | 4.27 | 0.62 |
+| Post-stratification | 0.58 | 0.35 | 1.10 |
+| Swing | 0.59 | **0.06** | **0.24** |
+| Hierarchical | **0.16** | 0.12 | 0.34 |
+
+### Convergence point
+
+Percentage of sections after which the error stays below the threshold until the end of the count.
+
+| | 2018 | | | 2022 | | | 2026 | | |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| **Threshold (pp)** | **1.0** | **0.5** | **0.25** | **1.0** | **0.5** | **0.25** | **1.0** | **0.5** | **0.25** |
+| Post-stratification | 41% | 76% | 88% | 3% | 63% | 79% | 21% | 25% | 45% |
+| Swing | 23% | 52% | 63% | 0.1% | 30% | 64% | 0.1% | 2% | 58% |
+| Hierarchical | 24% | 53% | 80% | 0.1% | 44% | 71% | 0.1% | 39% | 47% |
+
+- **Early in the count, the methods are much closer to the final result than the running tally.** With 5% of sections, the tally was 4 to 5 points off in 2018 and 2022, and all three methods were within 0.6 point. In 2026 the tally started close to the final result (0.6 point at 5%) and drifted away later, reaching 2.3 points at 25%.
+- **Swing and hierarchical stayed below 1 point from 0.1% of sections in 2022 and 2026.** Post-stratification oscillates more in the first 15%, with jumps of up to 1.5 points between consecutive points.
+- **2018 was the hard case.** Between 10% and 40% of sections, swing and hierarchical underestimated A by 0.7 to 1.0 point, and post-stratification by up to 1.4. The sections arriving in that stretch favored B more than the first round suggested.
+- **Tighter thresholds depend on the election.** Staying below 0.25 point took 45% to 88% of sections, depending on year and method.
+
+We also estimated uncertainty bands by bootstrap, with 200 refits per point. Their measured coverage was low, so they do not work as a margin of error and are left out of this page.
+
+## Limitations
+
+- Three elections are not enough to generalize how the methods behave.
+- Ballot box report reception times are not when the running tally was published.
+- The hierarchical and turnout penalties were set without calibration; tuning them would require elections outside the evaluation.

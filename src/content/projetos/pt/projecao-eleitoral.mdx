@@ -1,0 +1,106 @@
+---
+titulo: Convergência de projeções eleitorais
+resumo: Comparação de três métodos que projetam o segundo turno presidencial durante a apuração, nos pleitos de 2018, 2022 e 2026, com a ordem real de chegada das seções reconstruída a partir dos dados do TSE.
+contexto: UFV · 2026
+tipo: Projeto acadêmico · INF425 na UFV
+periodo: "2026"
+ordem: 6
+stack: [Python, PyTorch, Pandas, Parquet, Regressão ponderada, Ridge, Docker]
+links:
+  codigo: https://github.com/lukagouvea/apuracoes-tse
+---
+
+import GraficoLinhas from '../../../components/GraficoLinhas.astro';
+import { opcoesAno, opcoesMetodo, paineisProjecao, paineisConvergencia } from '../../../data/eleicoes';
+
+## Contexto
+
+Durante a apuração, as seções não chegam em ordem aleatória: regiões inteiras são contadas antes de outras, e a parcial pode ficar vários pontos longe do resultado final. Métodos de projeção corrigem isso estimando os votos que ainda faltam a partir do que já foi apurado e do histórico de cada município.
+
+A pergunta do trabalho é com quantas seções apuradas cada método chega perto do resultado final e permanece perto dele. Feito em dupla com Gabriel Campos Moreira Fernandes.
+
+## Dados e protocolo
+
+- **Pleitos:** segundo turno presidencial de 2018 (Haddad × Bolsonaro), 2022 (Lula × Jair Bolsonaro) e 2026 (Lula × Flávio Bolsonaro), de 454 mil a 499 mil seções cada.
+- **Fonte:** 65 arquivos oficiais do TSE (cerca de 2,5 GiB), com URLs e SHA-256 registrados, convertidos para Parquet e conferidos contra o resumo municipal independente.
+- **Ordem da apuração:** em 2018, o horário da primeira totalização de cada seção; em 2022 e 2026, o horário de recebimento dos boletins de urna. Seções com o mesmo horário entram juntas.
+- **Referência:** apenas o primeiro turno do mesmo ano, agregado por município. Nenhum parâmetro foi calibrado contra o resultado avaliado.
+- **Replay:** 103 pontos por pleito (0,1%, 0,2%, 0,5% e de 1% a 100% em passos de 1 ponto). Em cada ponto o modelo vê só as seções já reveladas, o que dá 927 projeções no total.
+- **Métrica:** erro absoluto em pontos percentuais sobre a votação final do candidato A. O ponto de convergência é o primeiro percentual a partir do qual o erro fica abaixo de 1,0, 0,5 ou 0,25 ponto até o fim.
+
+## Métodos
+
+Os três mantêm fixos os votos já apurados e estimam só os que faltam, município a município. O volume esperado de cada seção pendente vem dos votos válidos do primeiro turno, ajustado pelo comparecimento observado até ali.
+
+- **Pós-estratificação:** usa a preferência já observada em cada município. Sem votos locais, recorre à UF e depois ao total nacional.
+- **Swing:** regressão ponderada (WLS) da mudança entre o primeiro e o segundo turno, com a preferência no primeiro turno e o porte do município como covariáveis.
+- **Hierárquico:** as mesmas covariáveis em níveis nacional, regional e estadual, com regularização Ridge que aproxima do nível superior os grupos com pouca evidência.
+
+Os estimadores foram escritos em PyTorch e rodam em CPU. O ambiente é uma imagem Docker com versões fixadas, e um script refaz as 927 projeções e as compara com as registradas, com tolerância de 1e-10.
+
+## Resultados
+
+### Projeção durante a apuração
+
+Projeção do resultado final de cada candidato (linha contínua) e parcial apurada no mesmo ponto (tracejada), na ordem usada no replay.
+
+<GraficoLinhas
+  id="projecao-pt"
+  lang="pt"
+  controles={[
+    { rotulo: 'Ano', opcoes: opcoesAno },
+    { rotulo: 'Método', opcoes: opcoesMetodo('pt') },
+  ]}
+  paineis={paineisProjecao('pt')}
+  eixoX="Seções apuradas (%)"
+  eixoY="Votos válidos (%)"
+  legenda="A partir de 1% das seções. Passe o cursor, ou use as setas com o gráfico em foco, para ver os valores."
+/>
+
+### Comparação entre os métodos
+
+<GraficoLinhas
+  id="convergencia-pt"
+  lang="pt"
+  controles={[{ rotulo: 'Ano', opcoes: opcoesAno }]}
+  paineis={paineisConvergencia('pt')}
+  faixa="±0,5 p.p. do final"
+  eixoX="Seções apuradas (%)"
+  eixoY="Votos válidos de A (%)"
+  legenda="Projeção da votação do candidato do PT (A) pelos três métodos. A parcial sai da escala no começo da apuração de 2018 e 2022."
+/>
+
+### Erro com 5% das seções apuradas
+
+Em pontos percentuais, sobre a votação final de A.
+
+| | 2018 | 2022 | 2026 |
+|---|--:|--:|--:|
+| Parcial apurada | 4,99 | 4,27 | 0,62 |
+| Pós-estratificação | 0,58 | 0,35 | 1,10 |
+| Swing | 0,59 | **0,06** | **0,24** |
+| Hierárquico | **0,16** | 0,12 | 0,34 |
+
+### Ponto de convergência
+
+Percentual de seções a partir do qual o erro fica abaixo do limite até o fim da apuração.
+
+| | 2018 | | | 2022 | | | 2026 | | |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| **Limite (p.p.)** | **1,0** | **0,5** | **0,25** | **1,0** | **0,5** | **0,25** | **1,0** | **0,5** | **0,25** |
+| Pós-estratificação | 41% | 76% | 88% | 3% | 63% | 79% | 21% | 25% | 45% |
+| Swing | 23% | 52% | 63% | 0,1% | 30% | 64% | 0,1% | 2% | 58% |
+| Hierárquico | 24% | 53% | 80% | 0,1% | 44% | 71% | 0,1% | 39% | 47% |
+
+- **No início da apuração, os métodos ficam bem mais perto do final que a parcial.** Com 5% das seções, a parcial estava 4 a 5 pontos longe do resultado em 2018 e 2022, e os três métodos a menos de 0,6 ponto. Em 2026 a parcial começou perto do final (0,6 ponto com 5%) e se afastou depois, chegando a 2,3 pontos com 25%.
+- **Swing e hierárquico ficaram abaixo de 1 ponto desde 0,1% das seções em 2022 e 2026.** A pós-estratificação oscila mais nos primeiros 15%, com saltos de até 1,5 ponto entre um ponto e o seguinte.
+- **2018 foi o caso difícil.** Entre 10% e 40% das seções, swing e hierárquico subestimaram A em 0,7 a 1,0 ponto, e a pós-estratificação em até 1,4. As seções que chegaram nesse trecho favoreceram B mais do que o primeiro turno indicava.
+- **Limites mais estreitos dependem do pleito.** Ficar abaixo de 0,25 ponto exigiu de 45% a 88% das seções, conforme o ano e o método.
+
+Também estimamos faixas de incerteza por bootstrap, com 200 reajustes por ponto. A cobertura medida ficou baixa, então essas faixas não valem como margem de erro e ficaram fora desta página.
+
+## Limitações
+
+- Três pleitos não bastam para generalizar o comportamento dos métodos.
+- Os horários de recebimento dos boletins não são o momento em que a parcial foi divulgada ao público.
+- As penalizações dos modelos hierárquico e de comparecimento foram fixadas sem calibração; ajustá-las exigiria pleitos fora da avaliação.

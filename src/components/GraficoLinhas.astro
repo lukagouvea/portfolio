@@ -1,0 +1,540 @@
+---
+// Gráfico de linhas por % de seções apuradas, com um painel por combinação de controles
+// (ano, ou ano × método). Desenhado no servidor em SVG; o script só troca o painel visível
+// e mostra a dica com os valores do ponto mais próximo.
+// Os painéis vêm de src/data/eleicoes.ts e os textos do MDX de cada idioma.
+
+export interface Serie {
+  nome: string;
+  // a/b: candidatos; s1–s3: métodos; parcial: cinza
+  cor: string;
+  traco?: 'solido' | 'tracejado' | 'pontilhado';
+  // Não entra no cálculo da escala; o que sair dela é cortado
+  foraDaEscala?: boolean;
+  // [% seções, %] — todas as séries de um painel usam os mesmos x
+  pontos: [number, number][];
+}
+
+export interface Painel {
+  chave: string[];
+  titulo: string;
+  series: Serie[];
+  referencia?: { y: number; nome?: string; faixa?: number };
+}
+
+interface Props {
+  id: string;
+  lang: 'pt' | 'en';
+  controles: { rotulo: string; opcoes: { valor: string; rotulo: string }[] }[];
+  paineis: Painel[];
+  eixoX: string;
+  eixoY: string;
+  faixa?: string;
+  legenda?: string;
+  // Pontos antes deste % de seções não definem a escala (o começo da apuração oscila muito)
+  xMinEscala?: number;
+}
+
+const { id, lang, controles, paineis, eixoX, eixoY, faixa, legenda, xMinEscala = 1 } = Astro.props;
+
+const W = 720;
+const H = 340;
+const M = { top: 16, right: 20, bottom: 48, left: 64 };
+const iw = W - M.left - M.right;
+const ih = H - M.top - M.bottom;
+const fmt = (v: number, casas = 1) =>
+  v.toLocaleString(lang === 'pt' ? 'pt-BR' : 'en-US', {
+    minimumFractionDigits: casas,
+    maximumFractionDigits: casas,
+  });
+
+const desenhos = paineis.map((p, pi) => {
+  const valores = p.series
+    .filter((s) => !s.foraDaEscala)
+    .flatMap((s) => s.pontos.filter(([x]) => x >= xMinEscala).map(([, y]) => y));
+  if (p.referencia) {
+    const f = p.referencia.faixa ?? 0;
+    valores.push(p.referencia.y - f, p.referencia.y + f);
+  }
+  const lo = Math.min(...valores);
+  const hi = Math.max(...valores);
+  const passo = [0.25, 0.5, 1, 2, 2.5, 5, 10].find((s) => (hi - lo) / s <= 7) ?? 10;
+  const y0 = Math.floor((lo - passo * 0.1) / passo) * passo;
+  const y1 = Math.ceil((hi + passo * 0.1) / passo) * passo;
+  const casas = passo < 1 ? (passo === 0.25 ? 2 : 1) : passo % 1 ? 1 : 0;
+  const x = (v: number) => M.left + (v / 100) * iw;
+  const y = (v: number) => M.top + (1 - (v - y0) / (y1 - y0)) * ih;
+  const ticksY: { y: number; rotulo: string }[] = [];
+  for (let v = y0; v <= y1 + 1e-9; v += passo) ticksY.push({ y: y(v), rotulo: fmt(v, casas) });
+  const ref = p.referencia;
+  return {
+    chave: p.chave.join('|'),
+    visivel: pi === 0,
+    titulo: p.titulo,
+    series: p.series.map((s) => ({
+      ...s,
+      d: s.pontos.map(([px, py], i) => `${i ? 'L' : 'M'}${x(px).toFixed(1)},${y(py).toFixed(1)}`).join(''),
+    })),
+    ref: ref && {
+      y: y(ref.y),
+      nome: ref.nome,
+      valor: fmt(ref.y, 2),
+      faixa: ref.faixa ? [y(ref.y + ref.faixa), y(ref.y - ref.faixa)] : null,
+    },
+    ticksY,
+    dica: {
+      x: p.series[0].pontos.map(([px]) => +x(px).toFixed(1)),
+      rotulosX: p.series[0].pontos.map(([px]) => fmt(px)),
+      series: p.series.map((s) => ({ nome: s.nome, cor: s.cor, traco: s.traco ?? 'solido', v: s.pontos.map(([, py]) => fmt(py, 2)) })),
+      ref: ref?.nome ? { nome: ref.nome, valor: fmt(ref.y, 2) } : null,
+    },
+  };
+});
+const ticksX = [0, 20, 40, 60, 80, 100].map((v) => ({ v, x: M.left + (v / 100) * iw }));
+const sufixoX = eixoX.replace(/\s*\(%\)$/, '');
+---
+
+<figure class="grafico-linhas" id={id} data-sufixo-x={sufixoX}>
+  {
+    controles.length > 0 && (
+      <div class="controles">
+        {controles.map((c, ci) => (
+          <div class="grupo" role="group" aria-label={c.rotulo} data-controle={ci}>
+            {c.opcoes.map((o, oi) => (
+              <button type="button" class="opcao mono" data-valor={o.valor} aria-pressed={oi === 0 ? 'true' : 'false'}>
+                {o.rotulo}
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  {
+    desenhos.map((g) => (
+      <div class="painel" data-chave={g.chave} hidden={!g.visivel}>
+        <ul class="chave">
+          {g.series.map((s) => (
+            <li>
+              <span class={`traco c-${s.cor} t-${s.traco ?? 'solido'}`} aria-hidden="true" />
+              {s.nome}
+            </li>
+          ))}
+          {g.ref?.nome && (
+            <li>
+              <span class="traco c-texto t-ref" aria-hidden="true" />
+              {g.ref.nome}
+            </li>
+          )}
+          {g.ref?.faixa && faixa && (
+            <li>
+              <span class="bloco" aria-hidden="true" />
+              {faixa}
+            </li>
+          )}
+        </ul>
+        <p class="titulo-painel mono">{g.titulo}</p>
+        <div class="area">
+          <svg
+            viewBox={`0 0 ${W} ${H}`}
+            role="img"
+            aria-label={`${g.titulo}. ${eixoY} × ${eixoX}.`}
+            tabindex="0"
+            data-dica={JSON.stringify(g.dica)}
+          >
+            <defs>
+              <clipPath id={`${id}-clip-${g.chave.replace('|', '-')}`}>
+                <rect x={M.left} y={M.top} width={iw} height={ih} />
+              </clipPath>
+            </defs>
+            {g.ref?.faixa && (
+              <rect class="faixa" x={M.left} y={g.ref.faixa[0]} width={iw} height={g.ref.faixa[1] - g.ref.faixa[0]} />
+            )}
+            {g.ticksY.map((t) => (
+              <g>
+                <line class="grade" x1={M.left} x2={M.left + iw} y1={t.y} y2={t.y} />
+                <text class="tick" x={M.left - 8} y={t.y} text-anchor="end" dominant-baseline="middle">
+                  {t.rotulo}
+                </text>
+              </g>
+            ))}
+            {ticksX.map((t) => (
+              <text class="tick" x={t.x} y={M.top + ih + 22} text-anchor="middle">
+                {t.v}
+              </text>
+            ))}
+            <line class="eixo" x1={M.left} x2={M.left + iw} y1={M.top + ih} y2={M.top + ih} />
+            <text class="rotulo-eixo" x={M.left + iw / 2} y={H - 6} text-anchor="middle">
+              {eixoX}
+            </text>
+            <text class="rotulo-eixo eixo-y" transform={`translate(14 ${M.top + ih / 2}) rotate(-90)`} text-anchor="middle">
+              {eixoY}
+            </text>
+            <g clip-path={`url(#${id}-clip-${g.chave.replace('|', '-')})`}>
+              {g.ref && <line class={g.ref.nome ? 'ref' : 'ref leve'} x1={M.left} x2={M.left + iw} y1={g.ref.y} y2={g.ref.y} />}
+              {[...g.series].reverse().map((s) => (
+                <path class={`linha c-${s.cor} t-${s.traco ?? 'solido'}`} d={s.d} />
+              ))}
+            </g>
+            <line class="cruz" x1="0" x2="0" y1={M.top} y2={M.top + ih} visibility="hidden" />
+          </svg>
+          <div class="dica mono" hidden />
+        </div>
+      </div>
+    ))
+  }
+  {legenda && <figcaption>{legenda}</figcaption>}
+</figure>
+
+<script>
+  type Dica = {
+    x: number[];
+    rotulosX: string[];
+    series: { nome: string; cor: string; traco: string; v: string[] }[];
+    ref: { nome: string; valor: string } | null;
+  };
+
+  document.querySelectorAll<HTMLElement>('.grafico-linhas').forEach((fig) => {
+    const sufixoX = fig.dataset.sufixoX ?? '';
+    const grupos = fig.querySelectorAll<HTMLElement>('.grupo');
+    const paineis = fig.querySelectorAll<HTMLElement>('.painel');
+
+    const atualizar = () => {
+      const chave = [...grupos]
+        .map((g) => g.querySelector<HTMLElement>('[aria-pressed="true"]')!.dataset.valor)
+        .join('|');
+      paineis.forEach((p) => (p.hidden = p.dataset.chave !== chave));
+    };
+    grupos.forEach((g) =>
+      g.querySelectorAll<HTMLButtonElement>('.opcao').forEach((b) =>
+        b.addEventListener('click', () => {
+          g.querySelectorAll('.opcao').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+          atualizar();
+        }),
+      ),
+    );
+
+    paineis.forEach((painel) => {
+      const svg = painel.querySelector('svg')!;
+      const cruz = svg.querySelector<SVGLineElement>('.cruz')!;
+      const dica = painel.querySelector<HTMLElement>('.dica')!;
+      const dados: Dica = JSON.parse(svg.dataset.dica!);
+      const largura = svg.viewBox.baseVal.width;
+      let atual = -1;
+
+      const item = (classes: string, valor: string, nome: string) => {
+        const li = document.createElement('div');
+        li.className = 'item';
+        const k = document.createElement('span');
+        k.className = `traco ${classes}`;
+        const v = document.createElement('strong');
+        v.textContent = valor;
+        const n = document.createElement('span');
+        n.textContent = nome;
+        li.append(k, v, n);
+        return li;
+      };
+
+      const mostrar = (i: number) => {
+        atual = Math.max(0, Math.min(dados.x.length - 1, i));
+        const px = dados.x[atual];
+        cruz.setAttribute('x1', String(px));
+        cruz.setAttribute('x2', String(px));
+        cruz.setAttribute('visibility', 'visible');
+        const cab = document.createElement('div');
+        cab.className = 'cab';
+        cab.textContent = `${dados.rotulosX[atual]}% · ${sufixoX}`;
+        const itens = dados.series.map((s) => item(`c-${s.cor} t-${s.traco}`, s.v[atual], s.nome));
+        if (dados.ref) itens.push(item('c-texto t-ref', dados.ref.valor, dados.ref.nome));
+        dica.replaceChildren(cab, ...itens);
+        dica.hidden = false;
+        const w = svg.getBoundingClientRect().width;
+        const pos = (px / largura) * w;
+        const esquerda = pos > w * 0.55;
+        dica.style.left = esquerda ? '' : `${pos + 12}px`;
+        dica.style.right = esquerda ? `${w - pos + 12}px` : '';
+      };
+      const esconder = () => {
+        cruz.setAttribute('visibility', 'hidden');
+        dica.hidden = true;
+      };
+      const indice = (ev: PointerEvent) => {
+        const r = svg.getBoundingClientRect();
+        const vx = ((ev.clientX - r.left) / r.width) * largura;
+        let melhor = 0;
+        dados.x.forEach((x, i) => {
+          if (Math.abs(x - vx) < Math.abs(dados.x[melhor] - vx)) melhor = i;
+        });
+        return melhor;
+      };
+
+      svg.addEventListener('pointermove', (ev) => mostrar(indice(ev)));
+      svg.addEventListener('pointerleave', esconder);
+      svg.addEventListener('blur', esconder);
+      svg.addEventListener('focus', () => mostrar(atual < 0 ? 0 : atual));
+      svg.addEventListener('keydown', (ev) => {
+        const passo = ev.shiftKey ? 10 : 1;
+        if (ev.key === 'ArrowRight') mostrar(atual + passo);
+        else if (ev.key === 'ArrowLeft') mostrar(atual - passo);
+        else if (ev.key === 'Home') mostrar(0);
+        else if (ev.key === 'End') mostrar(dados.x.length - 1);
+        else if (ev.key === 'Escape') esconder();
+        else return;
+        ev.preventDefault();
+      });
+    });
+  });
+</script>
+
+<style>
+  /* Cores validadas para os dois temas (CVD e contraste com a superfície) */
+  .grafico-linhas {
+    --s1: #2a78d6;
+    --s2: #eb6834;
+    --s3: #1baf7a;
+    --ca: #d03b4f;
+    --cb: #2a78d6;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  :global(:root[data-theme='dark']) .grafico-linhas {
+    --s1: #3987e5;
+    --s2: #d95926;
+    --s3: #199e70;
+    --ca: #e0566a;
+    --cb: #3987e5;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :global(:root:not([data-theme='light'])) .grafico-linhas {
+      --s1: #3987e5;
+      --s2: #d95926;
+      --s3: #199e70;
+      --ca: #e0566a;
+      --cb: #3987e5;
+    }
+  }
+
+  .grafico-linhas :global(.c-s1) { --c: var(--s1); }
+  .grafico-linhas :global(.c-s2) { --c: var(--s2); }
+  .grafico-linhas :global(.c-s3) { --c: var(--s3); }
+  .grafico-linhas :global(.c-a) { --c: var(--ca); }
+  .grafico-linhas :global(.c-b) { --c: var(--cb); }
+  .grafico-linhas :global(.c-parcial) { --c: var(--muted); }
+  .grafico-linhas :global(.c-texto) { --c: var(--text); }
+
+  .controles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+  }
+
+  .grupo {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .opcao {
+    font-size: 13px;
+    padding: 6px 12px;
+    border: 1px solid var(--line2);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text2);
+    cursor: pointer;
+  }
+
+  .opcao[aria-pressed='true'] {
+    background: var(--text);
+    border-color: var(--text);
+    color: var(--bg);
+  }
+
+  .painel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .painel[hidden] {
+    display: none;
+  }
+
+  .chave {
+    list-style: none;
+    padding: 0 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    gap: 6px 16px !important;
+    font-size: 13px;
+    color: var(--text2);
+  }
+
+  .chave li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .grafico-linhas :global(.traco) {
+    display: inline-block;
+    flex: none;
+    width: 16px;
+    height: 0;
+    border-top: 2px solid var(--c);
+  }
+
+  .grafico-linhas :global(.traco.t-tracejado) { border-top-style: dashed; }
+  .grafico-linhas :global(.traco.t-pontilhado) { border-top-style: dotted; }
+  .grafico-linhas :global(.traco.t-ref) { border-top: 1.5px dashed var(--c); }
+
+  .bloco {
+    display: inline-block;
+    width: 16px;
+    height: 10px;
+    background: var(--chip);
+    border-radius: 2px;
+  }
+
+  .titulo-painel {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .area {
+    position: relative;
+  }
+
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    touch-action: pan-y;
+  }
+
+  svg:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 4px;
+  }
+
+  .faixa {
+    fill: var(--chip);
+  }
+
+  .grade {
+    stroke: var(--line);
+  }
+
+  .eixo {
+    stroke: var(--line2);
+  }
+
+  .tick {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    fill: var(--muted);
+  }
+
+  .rotulo-eixo {
+    font-size: 12px;
+    fill: var(--muted);
+  }
+
+  .linha {
+    fill: none;
+    stroke: var(--c);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+
+  .linha.t-tracejado {
+    stroke-width: 1.5;
+    stroke-dasharray: 5 4;
+    stroke-linecap: butt;
+  }
+
+  .linha.t-pontilhado {
+    stroke-width: 1.5;
+    stroke-dasharray: 2 3;
+    stroke-linecap: butt;
+  }
+
+  .ref {
+    stroke: var(--text);
+    stroke-width: 1.25;
+    stroke-dasharray: 5 4;
+  }
+
+  .ref.leve {
+    stroke: var(--line2);
+    stroke-dasharray: none;
+  }
+
+  .cruz {
+    stroke: var(--text2);
+  }
+
+  .dica {
+    position: absolute;
+    top: 12px;
+    pointer-events: none;
+    background: var(--surface);
+    border: 1px solid var(--line2);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    white-space: nowrap;
+  }
+
+  .dica[hidden] {
+    display: none;
+  }
+
+  .dica :global(.cab) {
+    color: var(--muted);
+    margin-bottom: 2px;
+  }
+
+  .dica :global(.item) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+  }
+
+  .dica :global(.item .traco) {
+    width: 18px;
+  }
+
+  .dica :global(.item strong) {
+    color: var(--text);
+    font-weight: 600;
+    min-width: 5ch;
+    text-align: right;
+  }
+
+  figcaption {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  @media (max-width: 600px) {
+    .tick,
+    .rotulo-eixo {
+      font-size: 22px;
+    }
+
+    .eixo-y {
+      display: none;
+    }
+  }
+</style>

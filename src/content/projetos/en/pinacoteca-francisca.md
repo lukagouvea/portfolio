@@ -4,7 +4,7 @@ resumo: Facial animation of Tarsila do Amaral's portrait “Francisca” for the
 contexto: MaVILab · 2023
 tipo: Outreach · MaVILab, UFV
 periodo: 09/2023 – 11/2023
-ordem: 7
+ordem: 8
 stack: [MediaPipe, Video warping, Computer vision]
 links:
   ver: https://mavilab-ufv.github.io/pinacoteca-50-anos/face-animation
