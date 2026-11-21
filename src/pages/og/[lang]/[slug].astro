@@ -1,0 +1,143 @@
+---
+// Modelo dos cards de compartilhamento (1200×630). Não é página do site:
+// scripts/gerar-og.mjs fotografa estas rotas e salva os PNGs em public/og/.
+import '@fontsource-variable/inter';
+import '@fontsource-variable/bricolage-grotesque';
+import '@fontsource/jetbrains-mono/400.css';
+import '@fontsource/jetbrains-mono/500.css';
+import '../../../styles/global.css';
+import MapaTalhoes from '../../../components/MapaTalhoes.astro';
+import { ui, type Lang } from '../../../i18n';
+import { projetosDe, slugDe } from '../../../lib/projetos';
+
+export async function getStaticPaths() {
+  const caminhos = [];
+  for (const lang of ['pt', 'en'] as const) {
+    caminhos.push({ params: { lang, slug: 'inicio' }, props: { lang, projeto: null } });
+    for (const projeto of await projetosDe(lang)) {
+      caminhos.push({ params: { lang, slug: slugDe(projeto) }, props: { lang, projeto } });
+    }
+  }
+  return caminhos;
+}
+
+const { lang, projeto } = Astro.props as {
+  lang: Lang;
+  projeto: Awaited<ReturnType<typeof projetosDe>>[number] | null;
+};
+
+const funcao = lang === 'pt' ? 'Desenvolvedor de software e machine learning' : 'Software and machine learning developer';
+const sobretitulo = projeto ? projeto.data.tipo : funcao;
+const titulo = projeto ? projeto.data.titulo : 'Luka Gouvêa';
+const subtitulo = projeto ? projeto.data.contexto : ui[lang].hero[1];
+const longo = titulo.length > 28;
+---
+
+<!doctype html>
+<html lang={lang === 'pt' ? 'pt-BR' : 'en'} data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="robots" content="noindex" />
+    <title>{titulo}</title>
+  </head>
+  <body>
+    <main class="card">
+      <div class="texto">
+        <span class="marca mono">luka<span class="ponto">.</span>gouvea</span>
+        <div class="centro">
+          <span class="sobretitulo mono">{sobretitulo}</span>
+          <h1 class:list={{ longo }}>{titulo}</h1>
+          <p>{subtitulo}</p>
+        </div>
+      </div>
+      <div class="mapa">
+        <MapaTalhoes />
+      </div>
+    </main>
+  </body>
+</html>
+
+<style>
+  body {
+    margin: 0;
+    width: 1200px;
+    height: 630px;
+    overflow: hidden;
+  }
+
+  .card {
+    width: 1200px;
+    height: 630px;
+    box-sizing: border-box;
+    padding: 64px 0 64px 72px;
+    display: flex;
+    align-items: stretch;
+    gap: 56px;
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  .texto {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .marca {
+    font-size: 24px;
+  }
+
+  .ponto {
+    color: var(--accent);
+  }
+
+  .centro {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding-bottom: 24px;
+  }
+
+  .sobretitulo {
+    font-size: 20px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  h1 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 88px;
+    line-height: 0.95;
+    letter-spacing: -0.035em;
+  }
+
+  h1.longo {
+    font-size: 64px;
+    line-height: 1;
+  }
+
+  p {
+    margin: 0;
+    font-size: 28px;
+    line-height: 1.35;
+    color: var(--text2);
+  }
+
+  .mapa {
+    flex: 0 0 440px;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  .mapa :global(svg) {
+    width: 560px;
+    max-width: none;
+    border-radius: 8px 0 0 8px;
+  }
+</style>
