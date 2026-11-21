@@ -1,0 +1,290 @@
+---
+import { render } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import Header from './Header.astro';
+import Footer from './Footer.astro';
+import { rotas, ui, type Lang } from '../i18n';
+import { slugDe, type Projeto } from '../lib/projetos';
+import { diagramas } from '../data/diagramas';
+import Diagrama from './Diagrama.astro';
+import Icone from './Icone.astro';
+
+interface Props {
+  lang: Lang;
+  projeto: Projeto;
+}
+
+const { lang, projeto } = Astro.props;
+const t = ui[lang];
+const { data } = projeto;
+const { Content } = await render(projeto);
+const outro: Lang = lang === 'pt' ? 'en' : 'pt';
+const slug = slugDe(projeto);
+const alternativa = rotas.projeto(outro, slug);
+const diagrama = diagramas[slug];
+const inicio = rotas.inicio(lang);
+---
+
+<Base
+  lang={lang}
+  titulo={`${data.titulo} · Luka Gouvêa`}
+  descricao={data.resumo}
+  alternativa={alternativa}
+  imagem={`/og/${lang}/${slug}.png`}
+>
+  <Header lang={lang} alternativa={alternativa} pagina="projeto" />
+
+  <section class="wrap cabecalho" aria-labelledby="titulo">
+    <span class="tipo mono">{data.tipo} · {data.periodo}</span>
+    <h1 id="titulo">{data.titulo}</h1>
+    <p class="resumo">{data.resumo}</p>
+    {
+      (data.links.codigo || data.links.demo || data.links.ver) && (
+        <p class="botoes links">
+          {data.links.codigo && (
+            <a class="botao primario" href={data.links.codigo}>
+              {data.links.codigo.includes('github.com') && <Icone nome="github" />}
+              {t.projeto.codigo} ↗
+            </a>
+          )}
+          {data.links.demo && (
+            <a class={data.links.codigo ? 'botao' : 'botao primario'} href={data.links.demo}>
+              {t.projeto.demo} ↗
+            </a>
+          )}
+          {data.links.ver && (
+            <a class={data.links.codigo || data.links.demo ? 'botao' : 'botao primario'} href={data.links.ver}>
+              {t.projeto.ver} ↗
+            </a>
+          )}
+        </p>
+      )
+    }
+  </section>
+
+  <main class="wrap corpo">
+    <div class="prosa">
+      <Content />
+    </div>
+
+    {
+      data.arquitetura && (
+        <section class="secao" aria-labelledby="arq-h">
+          <h2 id="arq-h" class="rotulo">{t.projeto.arquitetura}</h2>
+          <div class="secao-corpo arquitetura">
+            <p>{data.arquitetura.descricao}</p>
+            {diagrama && (
+              <Diagrama
+                diagrama={diagrama}
+                lang={lang}
+                id={`arq-${slug}`}
+                titulo={`${t.projeto.arquitetura}: ${data.titulo}`}
+              />
+            )}
+          </div>
+        </section>
+      )
+    }
+
+    <section class="secao ultima" aria-labelledby="stack-h">
+      <h2 id="stack-h" class="rotulo">{t.projeto.stack}</h2>
+      <p class="secao-corpo stack-lista mono">{data.stack.join(' · ')}</p>
+    </section>
+  </main>
+
+  <Footer lang={lang}>
+    <a href={`${inicio}#projetos`}>{t.projeto.todos}</a>
+  </Footer>
+</Base>
+
+<style>
+  .cabecalho {
+    padding-block: clamp(40px, 6vw, 64px) 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .tipo {
+    font-size: 13px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(38px, 7vw, 88px);
+    line-height: 0.95;
+    letter-spacing: -0.035em;
+    overflow-wrap: break-word;
+  }
+
+  .resumo {
+    font-size: 18px;
+    color: var(--text2);
+    max-width: 60ch;
+  }
+
+  .links {
+    margin-top: 8px;
+  }
+
+  .corpo {
+    padding-bottom: 32px;
+  }
+
+  /* Markdown: cada "## Título" vira o rótulo à esquerda, e o texto fica à direita */
+  .prosa {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(0, 3.3fr);
+    color: var(--text2);
+  }
+
+  .prosa :global(h2) {
+    grid-column: 1;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    line-height: 1.6;
+    border-top: 1px solid var(--line);
+    padding: 48px 48px 0 0;
+  }
+
+  .prosa :global(> :not(h2)) {
+    grid-column: 2;
+    max-width: 68ch;
+  }
+
+  .prosa :global(h2 + *) {
+    border-top: 1px solid var(--line);
+    padding-top: 48px;
+    max-width: none;
+  }
+
+  .prosa :global(> :not(h2) + :not(h2)) {
+    margin-top: 16px;
+  }
+
+  .prosa :global(> :not(h2):has(+ h2)),
+  .prosa :global(> :not(h2):last-child) {
+    padding-bottom: 56px;
+  }
+
+  .prosa :global(> figure),
+  .prosa :global(> table) {
+    max-width: none;
+  }
+
+  .prosa :global(h3) {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--text);
+  }
+
+  .prosa :global(> :not(h2) + h3) {
+    margin-top: 44px;
+  }
+
+  .prosa :global(h3 + *) {
+    margin-top: 12px;
+  }
+
+  .prosa :global(> :not(h2) + figure),
+  .prosa :global(> figure + :not(h2)),
+  .prosa :global(> :not(h2) + table) {
+    margin-top: 28px;
+  }
+
+  .prosa :global(table) {
+    display: block;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .prosa :global(th),
+  .prosa :global(td) {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+
+  .prosa :global(th) {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+  }
+
+  .prosa :global(th:first-child),
+  .prosa :global(td:first-child) {
+    padding-left: 0;
+  }
+
+  .prosa :global(table + p) {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 10px;
+  }
+
+  .prosa :global(ul) {
+    padding-left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .prosa :global(strong) {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .prosa :global(a) {
+    color: var(--text);
+    text-decoration-color: var(--accent);
+  }
+
+  @media (max-width: 760px) {
+    .prosa {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .prosa :global(h2) {
+      grid-column: 1;
+      padding: 48px 0 0;
+    }
+
+    .prosa :global(> :not(h2)) {
+      grid-column: 1;
+    }
+
+    .prosa :global(h2 + *) {
+      border-top: 0;
+      padding-top: 24px;
+    }
+  }
+
+  .arquitetura {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    color: var(--text2);
+  }
+
+  .ultima {
+    padding-bottom: 24px;
+  }
+
+  .stack-lista {
+    font-size: 14px;
+    color: var(--text2);
+  }
+</style>
