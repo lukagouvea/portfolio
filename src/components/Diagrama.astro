@@ -1,0 +1,285 @@
+---
+import type { Lang } from '../i18n';
+import type { Diagrama, Layout, TipoAresta, Txt } from '../data/diagramas';
+
+interface Props {
+  diagrama: Diagrama;
+  lang: Lang;
+  // prefixo para os ids dos marcadores de seta
+  id: string;
+  titulo: string;
+}
+
+const { diagrama, lang, id, titulo } = Astro.props;
+const tx = (t: Txt) => (typeof t === 'string' ? t : t[lang]);
+
+const tipos: TipoAresta[] = ['sync', 'async', 'deploy'];
+const legendas: Record<TipoAresta, Txt> = {
+  sync: { pt: 'requisição', en: 'request' },
+  async: { pt: 'assíncrono', en: 'asynchronous' },
+  deploy: 'deploy',
+};
+
+const usados = diagrama.semLegendaArestas
+  ? []
+  : tipos.filter((tipo) =>
+      [...diagrama.largo.arestas, ...diagrama.estreito.arestas].some((a) => a.tipo === tipo),
+    );
+
+const legendasNos: Record<'congelado' | 'treinavel', Txt> = {
+  congelado: { pt: 'pesos congelados', en: 'frozen weights' },
+  treinavel: { pt: 'treinável', en: 'trainable' },
+};
+const nosUsados = (['congelado', 'treinavel'] as const).filter((tipo) =>
+  Object.values(diagrama.nos).some((n) => n.tipo === tipo),
+);
+
+const caminho = (pontos: [number, number][]) =>
+  pontos.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x} ${y}`).join(' ');
+
+const layouts: [string, Layout][] = [
+  ['largo', diagrama.largo],
+  ['estreito', diagrama.estreito],
+];
+---
+
+<figure class="diagrama">
+  {
+    layouts.map(([chave, l]) => {
+      const pref = `${id}-${chave}`;
+      return (
+        <svg
+          class={`svg-${chave}`}
+          viewBox={`-2 -2 ${l.w + 4} ${l.h + 4}`}
+          style={`max-width: ${l.w + 4}px`}
+          role="img"
+          aria-labelledby={`${pref}-titulo`}
+        >
+          <title id={`${pref}-titulo`}>{titulo}</title>
+          <defs>
+            {tipos.map((tipo) => (
+              <marker
+                id={`${pref}-seta-${tipo}`}
+                viewBox="0 0 10 10"
+                refX="9"
+                refY="5"
+                markerWidth="6"
+                markerHeight="6"
+                orient="auto-start-reverse"
+              >
+                <path d="M0 0 L10 5 L0 10 z" class={`ponta ${tipo}`} />
+              </marker>
+            ))}
+          </defs>
+
+          {l.grupos.map((g) => (
+            <g class="grupo">
+              <rect x={g.caixa[0]} y={g.caixa[1]} width={g.caixa[2]} height={g.caixa[3]} rx="10" />
+              <text x={g.rotulo[0]} y={g.rotulo[1]} text-anchor={g.rotulo[2]}>
+                {tx(diagrama.grupos[g.id])}
+              </text>
+            </g>
+          ))}
+
+          {l.arestas.map((a) => (
+            <path class={`aresta ${a.tipo}`} d={caminho(a.pontos)} marker-end={`url(#${pref}-seta-${a.tipo})`} />
+          ))}
+
+          {Object.entries(l.nos).map(([noId, [x, y, w, h]]) => {
+            const no = diagrama.nos[noId];
+            return (
+              <g class={`no ${no.tipo ?? ''}`}>
+                <rect x={x} y={y} width={w} height={h} rx="6" />
+                <text class="no-titulo" x={x + 12} y={y + 22}>
+                  {tx(no.titulo)}
+                </text>
+                {(no.linhas ?? []).map((linha, i) => (
+                  <text class="no-linha" x={x + 12} y={y + 40 + i * 15}>
+                    {tx(linha)}
+                  </text>
+                ))}
+              </g>
+            );
+          })}
+
+          {l.arestas
+            .filter((a) => a.texto && a.rotulo)
+            .map((a) => (
+              <text class="rotulo-aresta" x={a.rotulo![0]} y={a.rotulo![1]} text-anchor={a.rotulo![2]}>
+                {tx(diagrama.arestas[a.texto!])}
+              </text>
+            ))}
+        </svg>
+      );
+    })
+  }
+  {
+    (usados.length > 0 || nosUsados.length > 0) && (
+      <figcaption class="legenda">
+        {usados.map((tipo) => (
+          <span class="item">
+            <svg width="28" height="8" viewBox="0 0 28 8" aria-hidden="true">
+              <line x1="0" y1="4" x2="28" y2="4" class={`aresta ${tipo}`} />
+            </svg>
+            {tx(legendas[tipo])}
+          </span>
+        ))}
+        {nosUsados.map((tipo) => (
+          <span class="item">
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" class={`no ${tipo}`}>
+              <rect x="0.5" y="0.5" width="13" height="13" rx="3" />
+            </svg>
+            {tx(legendasNos[tipo])}
+          </span>
+        ))}
+      </figcaption>
+    )
+  }
+</figure>
+
+<style>
+  .diagrama {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .svg-largo,
+  .svg-estreito {
+    width: 100%;
+    height: auto;
+  }
+
+  .svg-largo {
+    display: block;
+  }
+
+  .svg-estreito {
+    display: none;
+  }
+
+  @media (max-width: 700px) {
+    .svg-largo {
+      display: none;
+    }
+
+    .svg-estreito {
+      display: block;
+      margin-inline: auto;
+    }
+  }
+
+  text {
+    font-family: var(--font-mono);
+  }
+
+  .grupo rect {
+    fill: none;
+    stroke: var(--line2);
+    stroke-dasharray: 4 4;
+  }
+
+  .grupo text {
+    font-size: 11px;
+    fill: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .no rect {
+    fill: var(--surface);
+    stroke: var(--line2);
+  }
+
+  .no.principal rect {
+    stroke: var(--accent);
+  }
+
+  .no.externo rect {
+    fill: var(--bg);
+    stroke-dasharray: 3 3;
+  }
+
+  .no.congelado rect {
+    fill: var(--chip);
+    stroke: var(--line2);
+  }
+
+  .no.treinavel rect {
+    fill: color-mix(in srgb, var(--accent) 14%, var(--surface));
+    stroke: var(--accent);
+  }
+
+  .no-titulo {
+    font-size: 12px;
+    font-weight: 500;
+    fill: var(--text);
+  }
+
+  .no.principal .no-titulo {
+    fill: var(--accent);
+  }
+
+  .no-linha {
+    font-size: 10px;
+    fill: var(--muted);
+  }
+
+  .aresta {
+    fill: none;
+    stroke-width: 1.4;
+    stroke-linejoin: round;
+  }
+
+  .aresta.sync {
+    stroke: var(--text2);
+  }
+
+  .aresta.async {
+    stroke: var(--muted);
+    stroke-dasharray: 5 4;
+  }
+
+  .aresta.deploy {
+    stroke: var(--accent);
+    stroke-dasharray: 1.5 4;
+    stroke-linecap: round;
+    stroke-width: 1.8;
+  }
+
+  .ponta.sync {
+    fill: var(--text2);
+  }
+
+  .ponta.async {
+    fill: var(--muted);
+  }
+
+  .ponta.deploy {
+    fill: var(--accent);
+  }
+
+  .rotulo-aresta {
+    font-size: 10px;
+    fill: var(--text2);
+    paint-order: stroke;
+    stroke: var(--bg);
+    stroke-width: 4px;
+    stroke-linejoin: round;
+  }
+
+  .legenda {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+</style>
