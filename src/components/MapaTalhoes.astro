@@ -1,0 +1,73 @@
+---
+// Talhões segmentados: as cores vêm das variáveis do tema (--m-*).
+// Os dois contornos destacados lembram uma máscara antes e depois do refinamento.
+const talhoes: [string, string][] = [
+  ['0,0 90,0 95,70 0,80', 'f1'],
+  ['90,0 170,0 165,95 95,70', 'f3'],
+  ['170,0 260,0 255,75 165,95', 'f2'],
+  ['260,0 330,0 335,90 255,75', 'solo'],
+  ['330,0 400,0 400,70 335,90', 'f4'],
+  ['0,80 95,70 80,160 0,170', 'f4'],
+  ['95,70 165,95 175,185 80,160', 'f0'],
+  ['165,95 255,75 245,165 175,185', 'f3'],
+  ['255,75 335,90 320,180 245,165', 'f1'],
+  ['335,90 400,70 400,165 320,180', 'f2'],
+  ['0,170 80,160 100,300 0,300', 'f2'],
+  ['80,160 175,185 140,240', 'solo'],
+  ['80,160 140,240 180,300 100,300', 'f3'],
+  ['140,240 175,185 180,300', 'f4'],
+  ['175,185 245,165 270,300 180,300', 'f1'],
+  ['245,165 320,180 340,300 270,300', 'f4'],
+  ['320,180 400,165 400,300 340,300', 'f0'],
+];
+
+// Talhões com linhas de plantio
+const comLinhas = [1, 5, 15, 12];
+---
+
+<svg class="mapa" viewBox="0 0 400 300" aria-hidden="true" focusable="false">
+  <defs>
+    <pattern id="linhas-plantio" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
+      <line x1="0" y1="0" x2="0" y2="6" stroke="#0f1512" stroke-width="1.4" stroke-opacity="0.4"></line>
+    </pattern>
+  </defs>
+  <g class="talhoes">
+    {talhoes.map(([pontos, cor]) => <polygon points={pontos} class={cor} />)}
+  </g>
+  <g fill="url(#linhas-plantio)">
+    {comLinhas.map((i) => <polygon points={talhoes[i][0]} />)}
+  </g>
+  <g class="contornos">
+    <polygon points="168,98 252,79 243,162 177,181" />
+    <polygon points="83,163 137,239 177,297 103,297" stroke-dasharray="4 3" />
+  </g>
+</svg>
+
+<style>
+  .mapa {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 4px;
+  }
+
+  .talhoes polygon {
+    stroke: var(--bg);
+    stroke-width: 3;
+    stroke-linejoin: round;
+  }
+
+  .f0 { fill: var(--m-f0); }
+  .f1 { fill: var(--m-f1); }
+  .f2 { fill: var(--m-f2); }
+  .f3 { fill: var(--m-f3); }
+  .f4 { fill: var(--m-f4); }
+  .solo { fill: var(--m-solo); }
+
+  .contornos polygon {
+    fill: none;
+    stroke: var(--m-contorno);
+    stroke-width: 1.6;
+    stroke-linejoin: round;
+  }
+</style>

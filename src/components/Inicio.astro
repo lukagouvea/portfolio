@@ -1,0 +1,369 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from './Header.astro';
+import Footer from './Footer.astro';
+import MapaTalhoes from './MapaTalhoes.astro';
+import Icone from './Icone.astro';
+import { rotas, ui, type Lang } from '../i18n';
+import { contato, curriculo, experiencias, formacao, habilidades } from '../data/perfil';
+import { projetosDe, slugDe } from '../lib/projetos';
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = ui[lang];
+const outro: Lang = lang === 'pt' ? 'en' : 'pt';
+const alternativa = rotas.inicio(outro);
+const projetos = await projetosDe(lang);
+const pdf = curriculo[lang];
+---
+
+<Base lang={lang} titulo="Luka Gouvêa" descricao={t.descricao} alternativa={alternativa} imagem={`/og/${lang}/inicio.png`}>
+  <Header lang={lang} alternativa={alternativa} pagina="inicio" />
+
+  <section class="wrap hero" aria-labelledby="nome">
+    <div class="hero-texto">
+      <h1 id="nome">Luka<br />Gouvêa</h1>
+      {t.hero.map((linha) => <p class="hero-linha">{linha}</p>)}
+      <p class="botoes hero-links">
+        <a class="botao primario" href={contato.github}><Icone nome="github" />GitHub</a>
+        <a class="botao" href={contato.linkedin}><Icone nome="linkedin" />LinkedIn</a>
+        <a class="botao" href={`mailto:${contato.email}`}><Icone nome="email" />E-mail</a>
+        {pdf && <a class="botao" href={pdf}><Icone nome="arquivo" />{t.curriculo}</a>}
+      </p>
+    </div>
+    <div class="hero-mapa">
+      <MapaTalhoes />
+    </div>
+  </section>
+
+  <main class="wrap">
+    <section id="experiencia" class="secao" aria-labelledby="exp-h">
+      <h2 id="exp-h" class="rotulo">{t.secoes.experiencia}</h2>
+      <div class="secao-corpo lista-exp">
+        {
+          experiencias[lang].map((e) => (
+            <article class="exp">
+              <div class="linha-titulo">
+                <h3>
+                  {e.url ? <a href={e.url}>{e.empresa}</a> : e.empresa} <span class="cargo">· {e.cargo}</span>
+                </h3>
+                <span class="data mono">{e.periodo}</span>
+              </div>
+              {e.itens.length > 1 ? (
+                <ul class="itens">
+                  {e.itens.map((i) => (
+                    <li>{i}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p class="itens">{e.itens[0]}</p>
+              )}
+              {e.stack && <p class="stack">{e.stack.join(' · ')}</p>}
+            </article>
+          ))
+        }
+      </div>
+    </section>
+
+    <section id="projetos" class="secao" aria-labelledby="proj-h">
+      <h2 id="proj-h" class="rotulo">{t.secoes.projetos}</h2>
+      <div class="secao-corpo grade-projetos">
+        {
+          projetos.map((p) => (
+            <article class="card">
+              <span class="card-contexto mono">{p.data.contexto}</span>
+              <h3>
+                <a href={rotas.projeto(lang, slugDe(p))}>{p.data.titulo} →</a>
+              </h3>
+              <p class="card-resumo">{p.data.resumo}</p>
+              <p class="stack">{p.data.stack.slice(0, 4).join(' · ')}</p>
+            </article>
+          ))
+        }
+      </div>
+    </section>
+
+    <section id="formacao" class="secao" aria-labelledby="form-h">
+      <h2 id="form-h" class="rotulo">{t.secoes.formacao}</h2>
+      <div class="secao-corpo lista-form">
+        {
+          formacao[lang].map((f) => (
+            <div class="form">
+              <div class="linha-titulo">
+                <h3>
+                  {f.curso} <span class="cargo">· {f.instituicao}</span>
+                </h3>
+                <span class="data mono">{f.periodo}</span>
+              </div>
+              {f.nota && <p class="itens">{f.nota}</p>}
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="secao" aria-labelledby="hab-h">
+      <h2 id="hab-h" class="rotulo">{t.secoes.habilidades}</h2>
+      <dl class="secao-corpo habilidades">
+        {
+          habilidades[lang].map(([grupo, itens]) => (
+            <>
+              <dt class="mono">{grupo}</dt>
+              <dd>{itens}</dd>
+            </>
+          ))
+        }
+      </dl>
+    </section>
+
+    <section id="contato" class="secao ultima" aria-labelledby="cont-h">
+      <h2 id="cont-h" class="rotulo">{t.secoes.contato}</h2>
+      <div class="secao-corpo contato">
+        <a class="destaque" href={`mailto:${contato.email}`}><Icone nome="email" tamanho="0.8em" /><span>{contato.email}</span></a>
+        <a href={contato.linkedin}><Icone nome="linkedin" tamanho="0.75em" /><span>linkedin.com/in/luka-gouvea</span></a>
+        <a href={contato.github}><Icone nome="github" tamanho="0.75em" /><span>github.com/lukagouvea</span></a>
+      </div>
+    </section>
+  </main>
+
+  <Footer lang={lang} />
+</Base>
+
+<style>
+  .hero {
+    padding-block: clamp(40px, 6vw, 72px) clamp(56px, 8vw, 96px);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 40px 64px;
+  }
+
+  .hero-texto {
+    flex: 1 1 440px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .hero-mapa {
+    flex: 1 1 420px;
+    min-width: 0;
+  }
+
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(56px, 8vw, 96px);
+    line-height: 0.95;
+    letter-spacing: -0.035em;
+  }
+
+  .hero-linha {
+    font-size: 18px;
+    color: var(--text2);
+    max-width: 46ch;
+  }
+
+  .hero-links {
+    margin-top: 12px;
+  }
+
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+  }
+
+  .linha-titulo {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 4px 16px;
+  }
+
+  .linha-titulo h3 {
+    font-size: 24px;
+  }
+
+  .lista-form .linha-titulo h3 {
+    font-size: 22px;
+  }
+
+  .linha-titulo h3 a {
+    text-decoration-color: var(--line2);
+  }
+
+  .cargo {
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  .data {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .lista-exp {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+  }
+
+  .exp,
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .form {
+    gap: 6px;
+  }
+
+  .lista-form {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  .itens {
+    color: var(--text2);
+  }
+
+  ul.itens {
+    padding-left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .grade-projetos {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: relative;
+    transition: border-color 0.15s;
+  }
+
+  .card:hover {
+    border-color: var(--line2);
+  }
+
+  .card h3 {
+    font-size: 22px;
+    line-height: 1.2;
+  }
+
+  /* O card inteiro é clicável pelo link do título */
+  .card h3 a {
+    text-decoration: none;
+  }
+
+  .card h3 a::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 6px;
+  }
+
+  .card-contexto {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .card-resumo {
+    font-size: 15px;
+    color: var(--text2);
+    flex-grow: 1;
+  }
+
+  .habilidades {
+    display: grid;
+    grid-template-columns: minmax(96px, 150px) minmax(0, 1fr);
+    gap: 10px 20px;
+    color: var(--text2);
+  }
+
+  .habilidades dt {
+    font-size: 13px;
+    color: var(--muted);
+    padding-top: 2px;
+  }
+
+  @media (max-width: 520px) {
+    .habilidades {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0;
+    }
+
+    .habilidades dd + dt {
+      margin-top: 14px;
+    }
+  }
+
+  .ultima {
+    padding-bottom: 24px;
+  }
+
+  .contato {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-family: var(--font-display);
+    font-size: clamp(20px, 3vw, 32px);
+    font-weight: 500;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  .contato {
+    align-items: flex-start;
+  }
+
+  .contato a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45em;
+    text-decoration: none;
+    min-width: 0;
+  }
+
+  .contato a :global(.icone) {
+    color: var(--muted);
+  }
+
+  .contato a span {
+    text-decoration: underline;
+    text-decoration-color: var(--line2);
+    text-underline-offset: 6px;
+    min-width: 0;
+  }
+
+  .contato a.destaque span {
+    text-decoration-color: var(--accent);
+  }
+
+  .contato a:hover span {
+    text-decoration-color: var(--text);
+  }
+
+  .contato a:hover :global(.icone) {
+    color: var(--text);
+  }
+</style>
