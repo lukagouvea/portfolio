@@ -7,7 +7,8 @@ on:
 
 concurrency:
   group: deploy
-  cancel-in-progress: true
+  # Deploys entram em fila: cancelar no meio do rsync deixaria o site pela metade.
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -44,7 +45,7 @@ jobs:
       - name: Enviar para a VPS
         env:
           ACCESS_HOST: ssh-arm.luka.dev.br
-          USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
@@ -56,11 +57,13 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           cat > ~/.ssh/config <<EOF
           Host $ACCESS_HOST
-            User $USER
+            User $DEPLOY_USER
             IdentityFile ~/.ssh/deploy
             IdentitiesOnly yes
             StrictHostKeyChecking yes
             ProxyCommand cloudflared access ssh --hostname %h
           EOF
           # og/<lang>/<slug>/ são só os modelos dos cards; os PNGs em og/<lang>/ vão normalmente
-          rsync -az --delete --exclude 'og/*/*/' dist/ "$ACCESS_HOST:/var/www/portfolio/"
+          # --delay-updates + --delete-after: os arquivos novos entram quase de uma vez no fim
+          # e os antigos (/_astro/*) só são apagados depois, então a página em uso não fica sem CSS/JS.
+          rsync -az --delete --delay-updates --delete-after --exclude 'og/*/*/' dist/ "$ACCESS_HOST:/var/www/portfolio/"
