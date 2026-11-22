@@ -16,7 +16,7 @@ export const ui = {
     outroIdioma: { rotulo: 'en', aria: 'English version' },
     tema: { claro: 'Mudar para tema claro', escuro: 'Mudar para tema escuro' },
     hero: [
-      'Desenvolvedor de software e machine learning. Estudante de Ciência da Computação na UFV.',
+      'Desenvolvedor de software e machine learning, formado em Ciência da Computação pela UFV.',
       'Trabalho com backend, infraestrutura e deep learning, principalmente com dados florestais e agrícolas.',
     ],
     curriculo: 'Currículo.pdf',
@@ -45,7 +45,7 @@ export const ui = {
     outroIdioma: { rotulo: 'pt', aria: 'Versão em português' },
     tema: { claro: 'Switch to light theme', escuro: 'Switch to dark theme' },
     hero: [
-      'Software and machine learning developer. Computer Science student at the Federal University of Viçosa (UFV), Brazil.',
+      'Software and machine learning developer with a B.Sc. in Computer Science from the Federal University of Viçosa (UFV), Brazil.',
       'I work on backend, infrastructure and deep learning, mostly with forestry and agricultural data.',
     ],
     curriculo: 'Resume.pdf',

@@ -97,7 +97,7 @@ export const formacao: Record<Lang, Formacao[]> = {
     {
       curso: 'Ciência da Computação',
       instituicao: 'UFV',
-      periodo: '2023 – 2027',
+      periodo: '2023 – 2026',
       nota: 'TCC sobre refinamento de máscaras de segmentação agrícola, orientado pelo prof. Hugo Neves.',
     },
     { curso: 'Técnico em Informática', instituicao: 'IF Sudeste MG', periodo: '2014 – 2016' },
@@ -106,7 +106,7 @@ export const formacao: Record<Lang, Formacao[]> = {
     {
       curso: 'B.Sc. in Computer Science',
       instituicao: 'UFV',
-      periodo: '2023 – 2027',
+      periodo: '2023 – 2026',
       nota: 'Thesis on refining agricultural segmentation masks, advised by Prof. Hugo Neves.',
     },
     { curso: 'Technical degree in Computing', instituicao: 'IF Sudeste MG', periodo: '2014 – 2016' },
