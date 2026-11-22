@@ -26,21 +26,41 @@ jobs:
         env:
           SITE_URL: ${{ vars.SITE_URL }}
 
+      # A VPS não aceita SSH direto da internet: a conexão passa pelo Cloudflare
+      # Tunnel (ssh-arm.luka.dev.br) e é autorizada no Cloudflare Access por um
+      # service token.
+      - name: Instalar cloudflared
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/cloudflared \
+            https://github.com/cloudflare/cloudflared/releases/download/2026.11.1/cloudflared-linux-amd64
+          sudo chmod +x /usr/local/bin/cloudflared
+
       # Secrets necessários (Settings → Secrets and variables → Actions):
-      #   DEPLOY_HOST         IP ou hostname da VPS
-      #   DEPLOY_USER         usuário de deploy na VPS (sem sudo)
-      #   DEPLOY_SSH_KEY      chave privada usada só para o deploy
-      #   DEPLOY_KNOWN_HOSTS  saída de `ssh-keyscan <host>`
+      #   DEPLOY_USER              usuário de deploy na VPS (sem sudo)
+      #   DEPLOY_SSH_KEY           chave privada usada só para o deploy
+      #   DEPLOY_KNOWN_HOSTS       chaves do host para ssh-arm.luka.dev.br
+      #   CF_ACCESS_CLIENT_ID      service token do Cloudflare Access
+      #   CF_ACCESS_CLIENT_SECRET
       - name: Enviar para a VPS
         env:
-          HOST: ${{ secrets.DEPLOY_HOST }}
+          ACCESS_HOST: ssh-arm.luka.dev.br
           USER: ${{ secrets.DEPLOY_USER }}
           SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
-          mkdir -p ~/.ssh
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy
           chmod 600 ~/.ssh/deploy
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host $ACCESS_HOST
+            User $USER
+            IdentityFile ~/.ssh/deploy
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            ProxyCommand cloudflared access ssh --hostname %h
+          EOF
           # og/<lang>/<slug>/ são só os modelos dos cards; os PNGs em og/<lang>/ vão normalmente
-          rsync -az --delete --exclude 'og/*/*/' -e "ssh -i ~/.ssh/deploy" dist/ "$USER@$HOST:/var/www/portfolio/"
+          rsync -az --delete --exclude 'og/*/*/' dist/ "$ACCESS_HOST:/var/www/portfolio/"
